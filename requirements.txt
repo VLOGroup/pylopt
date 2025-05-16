@@ -1,0 +1,13 @@
+torch==2.6.0
+numpy==2.2.4
+confuse==2.0.1
+scipy==1.15.2
+opencv-python-headless==4.11.0.86
+matplotlib==3.10.1
+PyQt5==5.15.11
+torchvision==0.21.0
+pillow==11.1.0
+sphinx-rtd-theme==3.0.2
+Sphinx==8.2.3
+build==1.2.2.post1
+tensorboard==2.19.0

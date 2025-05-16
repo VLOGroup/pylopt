@@ -1,0 +1,17 @@
+# Compiled files
+__pycache__/
+
+# Virtual environments
+venv/
+.venv/
+
+# Checkpoints of Jupyter notebooks
+.ipynb_checkpoints/
+
+# Packaging
+build/
+dist/
+*.egg-info/
+
+# Log files
+*.log
