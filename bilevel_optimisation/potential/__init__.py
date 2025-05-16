@@ -1,0 +1,2 @@
+from bilevel_optimisation.potential.StudentT import StudentT
+from bilevel_optimisation.potential.GaussianMixture import GaussianMixture
