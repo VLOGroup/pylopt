@@ -1,0 +1,37 @@
+regulariser:
+  potential:
+    name: 'StudentT'
+  filters:
+    padding_mode: 'reflect'
+    initialisation:
+      file: 'data/pretrained_models/foe_filters_7x7_chen-ranftl-pock_2014.pt'
+      multiplier: 255.0
+    trainable: False
+  filter_weights:
+    initialisation:
+      file: 'data/pretrained_models/foe_filter-weights_7x7_thaler_2025.pt'
+      multiplier: 1.0
+    trainable: False
+
+measurement_model:
+  forward_operator: 'Identity'
+  noise_level: 0.1
+
+inner_energy:
+  type: 'OptimisationEnergy'          # values in ['OptimisationEnergy', 'UnrollingEnergy']
+  lam: 0.005
+  optimiser:
+    name: 'NAGOptimiser'
+    parameters: {lip_const_default: 1024}
+    stopping:
+      name: 'EarlyStopping'
+      parameters:
+        max_num_iterations: 1000
+        rel_tol: 0.00001
+data:
+  type: 'float64'
+  dataset:
+    train:
+      root_dir: '/home/florianthaler/Documents/data/image_data/BSDS300/images/train'
+    test:
+      root_dir: '/home/florianthaler/Documents/data/image_data/some_images'

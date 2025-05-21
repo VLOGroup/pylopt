@@ -185,9 +185,6 @@ class BilevelUnrolling(Function):
     """
     Subclass of torch.autograd.Function with the purpose to provide a custom backward
     function based on an unrolling scheme.
-
-    TODO:
-        > implement me!
     """
     @staticmethod
     def forward(ctx: FunctionCtx, inner_energy: InnerEnergy, x_clean: torch.Tensor,

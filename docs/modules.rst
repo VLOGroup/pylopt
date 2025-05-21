@@ -1,7 +1,7 @@
-stochastic_bilevel_optimisation
+bilevel_optimisation
 ===============================
 
 .. toctree::
-   :maxdepth: 4
+   :maxdepth: 2
 
-   stochastic_bilevel_optimisation
+   bilevel_optimisation

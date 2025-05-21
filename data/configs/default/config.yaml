@@ -1,0 +1,67 @@
+regulariser:
+  potential:
+    name: 'StudentT'
+    file: ''
+    parameters:                   # if file is specified, parameters will be ignored
+      gmm:
+        num_components: 125
+        box_lower: -1.0
+        box_upper: 1.0
+        weights:
+          initialisation:
+            parameters:
+              name: 'uniform'
+        trainable: True
+  filters:
+    padding_mode: 'reflect'
+    initialisation:
+      file: 'data/pretrained_models/foe_filters_7x7_chen-ranftl-pock_2014.pt'
+      multiplier: 255.0           # floating point value the filters initially will be multiplied
+                                  # NOTE:
+                                  #   > the filters [...]chen-ranftl-pock_2014.pt were trained with
+                                  #     images taking values in [0, 255] - thus, multiplication with 255
+                                  #     is required!
+      parameters:                 # if file is specified, parameters will be ignored
+        filter_dim: 7
+        name: 'dct'
+    trainable: True
+  filter_weights:
+    initialisation:
+      file: ''
+      multiplier: 0.000001      # floating point value the filters initially will be multiplied
+      parameters:               # if file is specified, parameters will be ignored
+        name: 'uniform'         # values in ['uniform', 'rand', 'randn']
+    trainable: True
+
+measurement_model:
+  forward_operator: 'Identity'
+  noise_level: 0.1
+
+inner_energy:
+  type: 'OptimisationEnergy'          # values in ['OptimisationEnergy', 'UnrollingEnergy']
+  lam: 0.1
+  optimiser:
+    name: 'NAGOptimiser'              # values in 'NAGOptimiser', 'AlternatingNAGOptimiser'
+    parameters: {}
+    stopping:
+      name: 'FixedIterationsStopping'
+      parameters: {max_num_iterations: 1000}
+
+bilevel:
+  loss: 'L2Loss'
+  optimiser:
+    name: 'NAGOptimiser'
+    parameters: {beta: 0.71, lip_const_default: 10000000}
+  solver:
+    name: 'CGSolver'
+    parameters: {max_num_iterations: 500, abs_tol: 0.000001, rel_tol: 0.000001}
+
+data:
+  type: 'float32'         # values in ['float32', 'float64']
+  dataset:
+    train:
+      root_dir: 'TODO: fill me'
+      batch_size: 32
+      crop_size: 64
+    test:
+      root_dir: 'TODO: fill me'

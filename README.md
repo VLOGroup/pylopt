@@ -94,7 +94,7 @@ while not training_finished:
     measurement_model = MeasurementModel(batch, forward_operator, noise_level)
     inner_energy = InnerEnergy(measurement_model, regulariser, lam, optimiser_factory)
 
-    loss = bilevel(inner_energy, batch)
+    loss = bilevel(outer_loss, inner_energy)
 ```
 
 ### Concrete
@@ -218,13 +218,11 @@ Concrete and executable code for training and prediction is contained in `stocha
 ## Citation
 
 ```bibtex
-@misc{...,
-    author = {},
-    title = {},
-    year = {2025},
-    publisher = {},
-    journal = {},
-    howpublished = {},
+@misc{biopt_2025,
+  author       = {TODO: fill me},
+  title        = {Bilevel optimisation},
+  howpublished = {\url{https://gitlab.tugraz.at/ivc/team_pock/research/bilevel_optimisation}},
+  year         = {2025}
 }
 ```
 ## References

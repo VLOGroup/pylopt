@@ -1,0 +1,45 @@
+regulariser:
+  potential:
+    name: 'StudentT'
+  filters:
+    padding_mode: 'reflect'
+    initialisation:
+      file: ''
+      multiplier: 0.001
+      parameters:
+        filter_dim: 7
+        name: 'rand'
+    trainable: True
+  filter_weights:
+    initialisation:
+      file: ''
+      multiplier: 7
+      parameters:
+        name: 'uniform'
+    trainable: True
+
+measurement_model:
+  forward_operator: 'Identity'
+  noise_level: 0.1
+
+inner_energy:
+  type: 'OptimisationEnergy'
+  lam: 0.1
+  optimiser:
+    name: 'NAGOptimiser'
+    stopping:
+      name: 'FixedIterationsStopping'
+
+bilevel:
+  loss: 'L2Loss'
+  optimiser:
+    name: 'Adam'
+    parameters: {lr: 0.0005}
+
+data:
+  type: 'float32'
+  dataset:
+    train:
+      root_dir: '/home/florianthaler/Documents/data/image_data/BSDS300/images/train'
+    test:
+      root_dir: '/home/florianthaler/Documents/data/image_data/some_images'

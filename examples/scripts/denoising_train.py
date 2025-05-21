@@ -57,27 +57,14 @@ def train_bilevel(config: Configuration):
     writer = SummaryWriter(log_dir=os.path.join(path_to_eval_dir, 'tensorboard'))
 
     evaluation_freq = 2
-    max_num_iterations = 500
+    max_num_iterations = 1000
     for k, batch in enumerate(train_loader):
 
         batch_ = batch.to(device=device, dtype=dtype)
-
-
-                    # batch_ = torch.load(
-                    #     '/home/florianthaler/Documents/research/stochastic_bilevel_optimisation/data/data_batches/batch_clean_{:d}.pt'.format(
-                    #         0)).to(device=torch.device('cuda:0'), dtype=torch.float32)
-                    # noisy = torch.load(
-                    #     '/home/florianthaler/Documents/research/stochastic_bilevel_optimisation/data/data_batches/batch_noisy_{:d}.pt'.format(
-                    #         0)).to(device=torch.device('cuda:0'), dtype=torch.float32)
-
         with torch.no_grad():
             measurement_model = set_up_measurement_model(batch_, config)
             inner_energy = set_up_inner_energy(measurement_model, regulariser, config)
             inner_energy = inner_energy.to(device=device, dtype=dtype)
-
-
-                    # inner_energy.measurement_model.obs_noisy = noisy.clone()
-                    # train_loss = bilevel.forward_debug(inner_energy)
 
             outer_loss = set_up_outer_loss(batch_, config)
             train_loss = bilevel.forward(outer_loss, inner_energy)
