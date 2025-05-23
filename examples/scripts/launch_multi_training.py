@@ -31,13 +31,13 @@ def main():
     available_gpus = [torch.cuda.device(i) for i in range(torch.cuda.device_count())]
 
     custom_config_dir_list = ['multi_training_I', 'multi_training_II', 'multi_training_III', 'multi_training_IV']
-    config_queue = multiprocessing.Queue()
+    config_dir_queue = multiprocessing.Queue()
     for cfg_dir in custom_config_dir_list:
-        config_queue.put(cfg_dir)
+        config_dir_queue.put(cfg_dir)
 
     procs = []
     for gpu_id in range(0, len(available_gpus)):
-        p = multiprocessing.Process(target=run_training_script_on_gpu, args=(gpu_id, config_queue))
+        p = multiprocessing.Process(target=run_training_script_on_gpu, args=(config_dir_queue, gpu_id))
         p.start()
         procs.append(p)
 
