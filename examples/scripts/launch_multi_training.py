@@ -22,7 +22,8 @@ def run_training_script_on_gpu(config_queue: multiprocessing.Queue,  gpu_id: int
         time.sleep(3)
         logging.info('[MULTI-TRAIN][GPU_{:d}] Run {:s}'.format(gpu_id, DENOISING_TRAIN_SCRIPT))
 
-        cmd = ['python', DENOISING_TRAIN_SCRIPT, '--configs', config_dir]
+        script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), DENOISING_TRAIN_SCRIPT)
+        cmd = ['python', script_path, '--configs', config_dir]
         subprocess.run(cmd, env=env)
 
         logging.info('[MULTI-TRAIN][GPU_{:d}] Finished {:s}'.format(gpu_id, DENOISING_TRAIN_SCRIPT))
