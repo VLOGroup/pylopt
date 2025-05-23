@@ -150,7 +150,7 @@ def visualise_gmm_potential(potential: GaussianMixture, device: torch.device, dt
                 axes[i, j].plot(t.detach().cpu().numpy(), torch.abs(t).detach().cpu().numpy(), color='orange')
                 axes[i, j].set_title('idx={:d}'.format(mixture_idx), fontsize=8)
                 axes[i, j].set_xlim(x_lower, x_upper)
-                axes[i, j].axis('equal')
+                axes[i, j].set_ylim(-0.01, 4)
             else:
                 fig.delaxes(axes[i, j])
 
