@@ -11,3 +11,4 @@ sphinx-rtd-theme==3.0.2
 Sphinx==8.2.3
 build==1.2.2.post1
 tensorboard==2.19.0
+jupyter==1.1.1

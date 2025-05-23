@@ -6,7 +6,6 @@ from pathlib import Path
 from scipy.fftpack import idct
 from typing import Iterator
 
-from bilevel_optimisation import potential
 from bilevel_optimisation import optimiser
 from bilevel_optimisation import solver
 from bilevel_optimisation import losses
@@ -22,6 +21,7 @@ from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExper
 from bilevel_optimisation.factories.BuildFactory import build_solver_factory
 from bilevel_optimisation.factories.BuildFactory import build_optimiser_factory, build_prox_map_factory
 from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementModel
+from bilevel_optimisation.potential import GaussianMixture, StudentT
 from bilevel_optimisation.projection.ParameterProjections import (zero_mean_projection,
                                                                   unit_simplex_projection)
 
@@ -126,8 +126,7 @@ def set_up_regulariser(config: Configuration) -> torch.nn.Module:
     filter_weights_spec = load_filter_weights_spec(config, num_filters=num_filters)
 
     potential_name = config['regulariser']['potential']['name'].get()
-    cls = getattr(potential, potential_name)
-    if cls == 'GaussianMixture':
+    if potential_name == 'GaussianMixture':
         potential_file = config['regulariser']['potential']['file'].get()
         gmm_params = config['regulariser']['potential']['parameters']['gmm'].get()
         trainable = gmm_params['trainable']
@@ -141,18 +140,20 @@ def set_up_regulariser(config: Configuration) -> torch.nn.Module:
             arch = model_data['_arch']
             arch['weights_spec'] = ParamSpec(-torch.ones(num_components), trainable=trainable)
 
-            potential_ = cls(**arch)
+            potential_ = GaussianMixture(**arch)
             potential_.load_state_dict(model_data)
         else:
             num_components = gmm_params['num_components']
             box_lower = gmm_params['box_lower']
             box_upper = gmm_params['box_upper']
             trainable = trainable
-            weights_spec = ParamSpec(value=torch.ones(num_components), trainable=trainable)
-            potential_ = cls(num_components=num_components, box_lower=box_lower, box_upper=box_upper,
-                             weights_spec=weights_spec)
+            log_weights_spec = ParamSpec(value=2 * torch.rand(num_filters, num_components) - 1, trainable=trainable)
+            potential_ = GaussianMixture(num_components=num_components, box_lower=box_lower, box_upper=box_upper,
+                                         log_weights_spec=log_weights_spec, num_filters=num_filters)
+    elif potential_name == 'StudentT':
+        potential_ = StudentT()
     else:
-        potential_ = cls()
+        raise ValueError('There is no potential titled {:s}'.format(potential_name))
 
     return FieldsOfExperts(potential_, filters_spec, filter_weights_spec)
 

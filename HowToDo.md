@@ -17,10 +17,11 @@
 
    This command generates .rst files containing comments extracted from the Python files for the documentation. 
 
-2. Build the docs
-3. 
-3. 
-3. 
+3. Build the docs
+   
+   To generate the Sphinx documentation, navigate to the `docs` directory and run `make html`.
+
+4. Deployment
 
 # Building wheel
 
@@ -30,4 +31,10 @@ packages listed in `requirements.txt` and activate the virtual environment. Then
     python -m build --wheel --outdir artefacts
 
 The Python wheel is stored in the directory `artefacts`. Execute `make clean`, to delete the
-generated binary files in the building process of the wheel.
+generated binary files in the building process of the wheel. 
+
+# Run Tensorboard
+
+Activate a virtual environment with pre-installed Tensorboard (if not installed, simply run `pip install tensorboard`).
+Then, in a shell type `tensorboard --logdir=<path_to_tfevents_dir>`. Then the dashboard of Tensorboard is per 
+default available at `http://localhost:6006/`.

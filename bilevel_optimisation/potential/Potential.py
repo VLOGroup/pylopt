@@ -8,7 +8,7 @@ class Potential(ABC, torch.nn.Module):
     Class which is used as base class for potentials. Subclassing requires the implementation of
     the methods forward(...) and forward_negative_log(...).
     """
-    def __init__(self, **kwargs):
+    def __init__(self):
         super().__init__()
 
     @abstractmethod

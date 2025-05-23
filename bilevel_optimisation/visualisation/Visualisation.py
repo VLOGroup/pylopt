@@ -6,6 +6,10 @@ from matplotlib.ticker import MultipleLocator
 from typing import List
 import numpy as np
 
+from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
+from bilevel_optimisation.potential import GaussianMixture
+
+
 def visualise_test_triplets(u_clean: torch.Tensor, u_noisy: torch.Tensor, u_denoised: torch.Tensor,
                             fig_dir_path: str, file_name_pre_fix: str = 'test_triplet') -> None:
     u_clean_splits = torch.split(u_clean, split_size_or_sections=1, dim=0)
@@ -72,21 +76,27 @@ def visualise_training_stats(train_loss_list: List[float], test_loss_list: List[
 
 def visualise_filters(filters: torch.Tensor, filter_weights: torch.Tensor, fig_dir_path: str,
                       file_name: str = 'filters.png') -> None:
-    filter_dim = filters.shape[-1]
-    fig, axes = plt.subplots(filter_dim, filter_dim, figsize=(11, 11), gridspec_kw={'hspace': 0.9, 'wspace': 0.2})
-    fig.delaxes(axes[0, 0])
+    num_filters = filters.shape[0]
+    num_filters_sqrt = int(np.sqrt(num_filters)) + 1
+    fig, axes = plt.subplots(num_filters_sqrt, num_filters_sqrt, figsize=(11, 11),
+                             gridspec_kw={'hspace': 0.9, 'wspace': 0.2})
 
-    for i in range(0, filter_dim):
-        for j in range(0, filter_dim):
-            if i + j >= 1:
-                filter_idx = i * filter_dim + j - 1
+
+    for i in range(0, num_filters_sqrt):
+        for j in range(0, num_filters_sqrt):
+            filter_idx = i * num_filters_sqrt + j
+            if filter_idx < num_filters:
                 filter_norm = torch.linalg.norm(filters[filter_idx]).detach().cpu().item()
                 filter_weight = filter_weights[filter_idx].detach().cpu().item()
 
-                axes[i, j].set_title('(idx={:d}, \nnorm={:.3f}, \nweight={:.3f})'.format(filter_idx, filter_norm, filter_weight), fontsize=8)
+                axes[i, j].imshow(filters[filter_idx, :, :, :].squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
+                title = '(idx={:d}, \nnorm={:.3f}, \nweight={:.3f})'.format(filter_idx,
+                                                                            filter_norm, filter_weight)
+                axes[i, j].set_title(title, fontsize=8)
                 axes[i, j].xaxis.set_visible(False)
                 axes[i, j].yaxis.set_visible(False)
-                axes[i, j].imshow(filters[filter_idx, :, :, :].squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
+            else:
+                fig.delaxes(axes[i, j])
 
     plt.savefig(os.path.join(fig_dir_path, file_name))
     plt.close(fig)
@@ -111,6 +121,38 @@ def visualise_filter_stats(filters_list: List[torch.Tensor], filter_weights_list
     ax_2.plot(iter_arr, filter_weights_list_)
     ax_2.set_xlabel('iteration')
     ax_2.set_title('weights of filters')
+
+    plt.savefig(os.path.join(fig_dir_path, file_name))
+    plt.close(fig)
+
+def visualise_gmm_potential(potential: GaussianMixture, device: torch.device, dtype: torch.dtype,
+                            fig_dir_path: str, file_name: str = 'mixtures.png') -> None:
+
+    x_lower = -3.0
+    x_upper = 3.0
+    steps = 101
+    t = torch.linspace(x_lower, x_upper, steps=steps, device=device, dtype=dtype)
+
+    num_mixtures = potential.get_number_of_mixtures()
+    num_mixtures_sqrt = int(np.sqrt(num_mixtures)) + 1
+    fig, axes = plt.subplots(num_mixtures_sqrt, num_mixtures_sqrt, figsize=(11, 11),
+                             gridspec_kw={'hspace': 0.9, 'wspace': 0.2})
+
+    for i in range(0, num_mixtures_sqrt):
+        for j in range(0, num_mixtures_sqrt):
+            mixture_idx = i * num_mixtures_sqrt + j
+            if mixture_idx < num_mixtures:
+                gmm = potential.get_single_mixture(mixture_idx)
+                y = gmm.forward_negative_log(t)
+
+                axes[i, j].plot(t.detach().cpu().numpy(), y.detach().cpu().numpy() -
+                                torch.min(y).detach().cpu().numpy(), color='blue')
+                axes[i, j].plot(t.detach().cpu().numpy(), torch.abs(t).detach().cpu().numpy(), color='orange')
+                axes[i, j].set_title('idx={:d}'.format(mixture_idx), fontsize=8)
+                axes[i, j].set_xlim(x_lower, x_upper)
+                axes[i, j].axis('equal')
+            else:
+                fig.delaxes(axes[i, j])
 
     plt.savefig(os.path.join(fig_dir_path, file_name))
     plt.close(fig)

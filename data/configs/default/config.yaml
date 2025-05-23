@@ -1,9 +1,9 @@
 regulariser:
   potential:
-    name: 'StudentT'
+    name: 'StudentT'                      # values in ['StudentT', 'GaussianMixture']
     file: ''
-    parameters:                   # if file is specified, parameters will be ignored
-      gmm:
+    parameters:                           # if file is specified, parameters will be ignored
+      gmm:                                # NOTE that there is no need for parameter specification for 'StudentT'
         num_components: 125
         box_lower: -1.0
         box_upper: 1.0
@@ -57,7 +57,7 @@ bilevel:
     parameters: {max_num_iterations: 500, abs_tol: 0.000001, rel_tol: 0.000001}
 
 data:
-  type: 'float32'         # values in ['float32', 'float64']
+  type: 'float32'         # values in ['float16', 'float32', 'float64']
   dataset:
     train:
       root_dir: 'TODO: fill me'

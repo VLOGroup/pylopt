@@ -7,18 +7,38 @@ from confuse import Configuration
 import argparse
 
 from bilevel_optimisation.dataset.ImageDataset import TestImageDataset, TrainingImageDataset
+from bilevel_optimisation.evaluation.Evaluation import evaluate_on_test_data
 from bilevel_optimisation.utils.DatasetUtils import collate_function
 from bilevel_optimisation.utils.LoggingUtils import (setup_logger, log_trainable_params_stats,
                                                      log_gradient_norms)
 from bilevel_optimisation.utils.SeedingUtils import seed_random_number_generators
 from bilevel_optimisation.utils.FileSystemUtils import create_evaluation_dir, save_foe_model
-from bilevel_optimisation.evaluation.Evaluation import evaluate_on_test_data
-from bilevel_optimisation.visualisation.Visualisation import visualise_training_stats, visualise_filter_stats
 from bilevel_optimisation.utils.SetupUtils import (set_up_regulariser, set_up_bilevel_problem,
                                                    set_up_measurement_model, set_up_inner_energy,
                                                    set_up_outer_loss)
 from bilevel_optimisation.utils.ConfigUtils import load_configs, parse_datatype
+from bilevel_optimisation.visualisation.Visualisation import (visualise_training_stats, visualise_filter_stats,
+                                                              visualise_filters, visualise_gmm_potential)
 
+def visualise_intermediate_results(regulariser: torch.nn.Module, device: torch.device, dtype: torch.dtype,
+                                   curr_iter: int, path_to_data_dir: str, filter_image_subdir: str = 'filters',
+                                   potential_image_subdir: str = 'potential') -> None:
+    # visualise filters
+    filter_images_dir_path = os.path.join(path_to_data_dir, filter_image_subdir)
+    if not os.path.exists(filter_images_dir_path):
+        os.makedirs(filter_images_dir_path, exist_ok=True)
+    visualise_filters(regulariser.get_filters(), regulariser.get_filter_weights(),
+                      fig_dir_path=filter_images_dir_path, file_name='filters_iter_{:d}.png'.format(curr_iter + 1))
+
+    # visualise potential functions (per filter)
+    potential = regulariser.get_potential()
+    if type(potential).__name__ == 'GaussianMixture':
+        potential_images_dir_path = os.path.join(path_to_data_dir, potential_image_subdir)
+        if not os.path.exists(potential_images_dir_path):
+            os.makedirs(potential_images_dir_path, exist_ok=True)
+
+        visualise_gmm_potential(potential, device, dtype, fig_dir_path=potential_images_dir_path,
+                                file_name='potential_iter_{:d}.png'.format(curr_iter + 1))
 
 def train_bilevel(config: Configuration):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -47,6 +67,7 @@ def train_bilevel(config: Configuration):
     logging.info('[TRAIN] compute initial test loss and initial psnr')
     psnr, test_loss = evaluate_on_test_data(test_loader, regulariser, config, device,
                                             dtype, -1, path_to_data_dir=None)
+
     train_loss_list = []
     test_loss_list = [test_loss]
     psnr_list = [psnr]
@@ -57,7 +78,7 @@ def train_bilevel(config: Configuration):
     writer = SummaryWriter(log_dir=os.path.join(path_to_eval_dir, 'tensorboard'))
 
     evaluation_freq = 2
-    max_num_iterations = 1000
+    max_num_iterations = 100
     for k, batch in enumerate(train_loader):
 
         batch_ = batch.to(device=device, dtype=dtype)
@@ -82,6 +103,7 @@ def train_bilevel(config: Configuration):
 
                 psnr, test_loss = evaluate_on_test_data(test_loader, regulariser, config, device,
                                                         dtype, k, path_to_eval_dir)
+                visualise_intermediate_results(regulariser, device, dtype, k, path_to_eval_dir)
 
                 logging.info('[TRAIN] denoised test images')
                 logging.info('[TRAIN]   > average psnr: {:.5f}'.format(psnr))

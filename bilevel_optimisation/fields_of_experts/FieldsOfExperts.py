@@ -29,7 +29,7 @@ class FieldsOfExperts(torch.nn.Module):
         """
         super().__init__()
 
-        self._potential = potential
+        self.potential = potential
 
         self.filters = torch.nn.Parameter(filters_spec.value, requires_grad=filters_spec.trainable)
         setattr(self.filters, 'param_name', 'filters')
@@ -52,16 +52,13 @@ class FieldsOfExperts(torch.nn.Module):
         return self.filter_weights.detach().clone()
 
     def get_potential(self) -> Potential:
-        return self._potential
+        return self.potential
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         logging.debug('[FoE] evaluate regulariser')
         x_padded = torch.nn.functional.pad(x, (self._padding, self._padding, self._padding, self._padding),
                                            self._padding_mode)
-        convolutions = torch.nn.functional.conv2d(x_padded, self.filters).movedim(0, 1)
-
-        neg_log_potential = self._potential.forward_negative_log(convolutions)
-        pix_sum = torch.sum(neg_log_potential, dim=(-2, -1))
-        filter_sum = torch.sum(pix_sum * self.filter_weights.reshape(-1, 1), dim=0)
-        return torch.sum(filter_sum)
+        convolutions = torch.nn.functional.conv2d(x_padded, self.filters)
+        neg_log_potential = self.potential.forward_negative_log(convolutions)
+        return torch.einsum('bfhw,f->', neg_log_potential, self.filter_weights)
 

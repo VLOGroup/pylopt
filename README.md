@@ -202,7 +202,7 @@ Concrete and executable code for training and prediction is contained in `stocha
     - Inner: NAGOptimiser
     - Outer: Adam
 
-- **Example VI**
+- **Example V**
   - Potential: Gaussian mixture
   - 
 

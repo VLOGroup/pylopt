@@ -8,8 +8,8 @@ class StudentT(Potential):
     Class implementing student-t potential - does not have any trainable parameters.
     """
 
-    def __init__(self, **kwargs):
-        super().__init__(**kwargs)
+    def __init__(self):
+        super().__init__()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return 1 / (1 + x ** 2)

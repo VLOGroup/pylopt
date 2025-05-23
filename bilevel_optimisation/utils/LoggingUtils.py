@@ -29,3 +29,7 @@ def log_gradient_norms(model: torch.nn.Module, writer: SummaryWriter, curr_itera
                 for k in range(0, param.shape[0]):
                     writer.add_scalar('grad_norms/{:s}/index_{:d}'.format(name, k),
                                       torch.linalg.norm(param[k, :, :, :]), curr_iteration_idx)
+            if name == 'potential.log_weights':
+                for k in range(0, param.shape[0]):
+                    writer.add_scalar('grad_norms/{:s}/index_{:d}'.format(name, k),
+                                      torch.linalg.norm(param[k, :]), curr_iteration_idx)
