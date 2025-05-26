@@ -62,3 +62,10 @@ class FieldsOfExperts(torch.nn.Module):
         neg_log_potential = self.potential.forward_negative_log(convolutions)
         return torch.einsum('bfhw,f->', neg_log_potential, self.filter_weights)
 
+
+
+
+
+
+
+

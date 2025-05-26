@@ -1,5 +1,6 @@
 from typing import Dict, Any, Mapping
 import torch
+import logsumexpv2 as lse
 
 from bilevel_optimisation.data.ParamSpec import ParamSpec
 from bilevel_optimisation.potential.Potential import Potential
@@ -25,12 +26,14 @@ class GaussianMixture(Potential):
                                  steps=self._num_components)
         self.centers = torch.nn.Parameter(centers, requires_grad=False)
 
+
+
         std_dev = 2 * (self._box_upper - self._box_lower) / (self._num_components - 1)
         self.variance = torch.nn.Parameter(torch.Tensor([std_dev ** 2]),
                                            requires_grad=False).to(device=self.centers.device)
 
         self.log_weights = torch.nn.Parameter(log_weights_spec.value, requires_grad=log_weights_spec.trainable)
-        self.scale_param = torch.nn.Parameter(torch.rand(self._num_filters), requires_grad=log_weights_spec.trainable)
+        self.scale_param = torch.nn.Parameter(torch.rand(self._num_filters) / 100, requires_grad=log_weights_spec.trainable)
         setattr(self.scale_param, 'proj', lambda z: torch.clamp(z, min=0.00001))
                     # setattr(self.weights, 'proj', weights_spec.projection)
                     #
@@ -38,6 +41,11 @@ class GaussianMixture(Potential):
                     # #
         self._gaussian_multiplier = torch.nn.Parameter(0.5 * torch.log(2 * torch.pi * self.variance),
                                                        requires_grad=False)
+
+        # ### terms for cuda accelerated computation
+        self.centers_ = torch.nn.Parameter(centers.unsqueeze(dim=0).repeat(num_filters, 1), requires_grad=False)
+        self.std_dev_ = torch.nn.Parameter(std_dev * torch.ones(num_filters, num_components), requires_grad=False)
+
 
     def get_number_of_mixtures(self) -> int:
         return self.log_weights.shape[0]
@@ -52,11 +60,20 @@ class GaussianMixture(Potential):
         pass
 
     def forward_negative_log(self, x: torch.Tensor) -> torch.Tensor:
-        diff_sq = (self.scale_param.reshape(1, -1, 1, 1) * x.unsqueeze(dim=1) - self.centers.reshape(1, -1, 1, 1, 1)) ** 2
-        log_weights = torch.nn.functional.log_softmax(self.log_weights, dim=1).reshape(1, self._num_components,
-                                                                                       self._num_filters, 1, 1)
+
+        # weights = torch.nn.functional.softmax(self.log_weights, dim=1)
+        # neg_log_filter_gmm, _ = lse.pot_act(self.scale_param.reshape(1, -1, 1, 1) * x, weights, self.centers_, self.std_dev_)
+        #   there is an issue with gradient computation!
+        #   more than that: it is slower than conventional implementation. how is that possible?
+
+
+        # conventional implementation
+        diff_sq = (self.scale_param.reshape(1, -1, 1, 1, 1) * x.unsqueeze(dim=2) - self.centers.reshape(1, 1, -1, 1, 1)) ** 2
+        log_weights = torch.nn.functional.log_softmax(self.log_weights, dim=1).reshape(1, self._num_filters,
+                                                                                       self._num_components, 1, 1)
         log_probs = -0.5 * diff_sq / self.variance + log_weights - self._gaussian_multiplier
-        neg_log_filter_gmm = -torch.logsumexp(log_probs, dim=1)
+        neg_log_filter_gmm = -torch.logsumexp(log_probs, dim=2)
+
         return neg_log_filter_gmm
 
 
