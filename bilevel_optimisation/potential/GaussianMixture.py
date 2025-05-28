@@ -8,25 +8,6 @@ from bilevel_optimisation.data.ParamSpec import ParamSpec
 from bilevel_optimisation.potential.Potential import Potential
 from bilevel_optimisation.gaussian_mixture_model.GaussianMixtureModel import GaussianMixtureModel
 
-class GaussianMixtureCUDA():
-    pass
-
-class GaussianMixtureCUDAFunction(Function):
-
-    @staticmethod
-    def forward(ctx: FunctionCtx, x: torch.Tensor, weights: torch.Tensor,
-                centers: torch.Tensor, std_dev: torch.Tensor) -> torch.Tensor:
-        neg_log_sum_exp, grad = lse.pot_act(x, weights, centers, std_dev)
-        ctx.save_for_backward(grad)
-
-        return neg_log_sum_exp
-
-    @staticmethod
-    def backward(ctx: FunctionCtx, *grad_output: torch.Tensor) -> Any:
-        grad = ctx.saved_tensors[0]
-
-        return grad, None, None, None
-
 class GaussianMixture(Potential):
     """
     Class, inheriting from Potential, modelling a Gaussian mixture potential for a FoE model. By design
@@ -58,10 +39,6 @@ class GaussianMixture(Potential):
         self.gaussian_multiplier = torch.nn.Parameter(0.5 * torch.log(2 * torch.pi * self.variance),
                                                       requires_grad=False)
 
-                # TODO: remove me ...
-                # self.centers_ = torch.nn.Parameter(centers.unsqueeze(dim=0).repeat(self.num_gmms, 1), requires_grad=False)
-                # self.std_dev_ = torch.nn.Parameter(std_dev * torch.ones(self.num_gmms, self.num_components), requires_grad=False)
-
     def get_number_of_mixtures(self) -> int:
         return self.num_gmms
 
@@ -75,25 +52,13 @@ class GaussianMixture(Potential):
         pass
 
     def forward_negative_log(self, x: torch.Tensor) -> torch.Tensor:
-
-        # conventional implementation
         diff_sq = (self.scale_param.reshape(1, -1, 1, 1, 1) * x.unsqueeze(dim=2) - self.centers.reshape(1, 1, -1, 1, 1)) ** 2
         log_weights = torch.nn.functional.log_softmax(self.log_weights, dim=1).reshape(1, self.num_gmms,
                                                                                        self.num_components, 1, 1)
         log_probs = -0.5 * diff_sq / self.variance + log_weights - self.gaussian_multiplier
         neg_log_filter_gmm = -torch.logsumexp(log_probs, dim=2)
 
-
-        weights = torch.nn.functional.softmax(self.log_weights, dim=1)
-        neg_log_filter_gmm_ = GaussianMixtureCUDAFunction.apply(self.scale_param.reshape(1, -1, 1, 1) * x,
-                                                                weights, self.centers,
-                                                                torch.sqrt(self.variance) * torch.ones(self.num_gmms,
-                                                                                                       device=self.variance.device))
-
-        # print(torch.linalg.norm(neg_log_filter_gmm_ - neg_log_filter_gmm))
-
-
-        return neg_log_filter_gmm_
+        return neg_log_filter_gmm
 
     def state_dict(self, *args, **kwargs) -> Dict[str, Any]:
         state = super().state_dict(*args, kwargs)

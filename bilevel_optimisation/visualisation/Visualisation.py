@@ -6,7 +6,6 @@ from matplotlib.ticker import MultipleLocator
 from typing import List
 import numpy as np
 
-from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
 from bilevel_optimisation.potential import GaussianMixture
 
 

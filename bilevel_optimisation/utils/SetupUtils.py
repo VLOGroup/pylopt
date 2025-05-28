@@ -1,10 +1,9 @@
-import os
 import numpy as np
 import torch
 from confuse import Configuration
-from pathlib import Path
 from scipy.fftpack import idct
 from typing import Iterator
+from importlib import resources
 
 from bilevel_optimisation import optimiser
 from bilevel_optimisation import solver
@@ -22,8 +21,10 @@ from bilevel_optimisation.factories.BuildFactory import build_solver_factory
 from bilevel_optimisation.factories.BuildFactory import build_optimiser_factory, build_prox_map_factory
 from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementModel
 from bilevel_optimisation.potential import GaussianMixture, StudentT
-from bilevel_optimisation.projection.ParameterProjections import (zero_mean_projection,
-                                                                  unit_simplex_projection)
+from bilevel_optimisation.projection.ParameterProjections import zero_mean_projection
+
+def get_package_root_path() -> str:
+    return resources.files('bilevel_optimisation').parent
 
 def load_filters_spec(config: Configuration) -> ParamSpec:
     filters = None
@@ -34,8 +35,7 @@ def load_filters_spec(config: Configuration) -> ParamSpec:
     filters_multiplier = config['regulariser']['filters']['initialisation']['multiplier'].get()
 
     if filters_file:
-        package_root_path = Path(__file__).resolve().parents[2]
-        filters = torch.load(os.path.join(package_root_path, filters_file))
+        filters = torch.load(filters_file)
     else:
         filters_params = config['regulariser']['filters']['initialisation']['parameters'].get()
         filter_dim = filters_params['filter_dim']
@@ -64,8 +64,7 @@ def load_filter_weights_spec(config: Configuration, num_filters: int) -> ParamSp
     filter_weights_file = config['regulariser']['filter_weights']['initialisation']['file'].get()
     filter_weights_multiplier = config['regulariser']['filter_weights']['initialisation']['multiplier'].get()
     if filter_weights_file:
-        package_root_path = Path(__file__).resolve().parents[2]
-        filter_weights = torch.load(os.path.join(package_root_path, filter_weights_file))
+        filter_weights = torch.load(filter_weights_file)
     else:
         filter_weights_params = config['regulariser']['filter_weights']['initialisation']['parameters'].get()
 
@@ -83,8 +82,7 @@ def load_gmm_log_weights_spec(config: Configuration, num_filters: int) -> ParamS
     trainable = potential_params['trainable']
     weights_file = config['regulariser']['potential']['parameters']['gmm']['initialisation']['file'].get()
     if weights_file:
-        package_root_path = Path(__file__).resolve().parents[2]
-        log_weights = torch.load(os.path.join(package_root_path, weights_file))
+        log_weights = torch.load(weights_file)
     else:
         log_weights_params = potential_params['initialisation']
 
@@ -109,8 +107,7 @@ def set_up_regulariser(config: Configuration) -> torch.nn.Module:
 
         if potential_file:
             # dummy initialisation
-            package_root_path = Path(__file__).resolve().parents[2]
-            model_data_file = os.path.join(package_root_path, potential_file)
+            model_data_file = potential_file
             model_data = torch.load(model_data_file)
             initialisation_dict = model_data['initialisation_dict']
             num_gmms = initialisation_dict['num_gmms'].item()

@@ -204,10 +204,15 @@ Concrete and executable code for training and prediction is contained in `stocha
 
 - **Example V**
   - Potential: Gaussian mixture
-  - 
-
-
-## Support
+  - Filters:
+    - Pretrained filters from [[1]](#1)
+    - Non-trainable
+  - Filter weights:
+    - Pretrained filters using configuration in Example I
+    - Non-trainable
+ - Optimiser:
+    - Inner: NAGOptimiser
+    - Outer: Adam
 
 ## Contributing
 
@@ -215,16 +220,6 @@ Concrete and executable code for training and prediction is contained in `stocha
 2. Create a feature branch
 3. Submit a pull request
 
-## Citation
-
-```bibtex
-@misc{biopt_2025,
-  author       = {TODO: fill me},
-  title        = {Bilevel optimisation},
-  howpublished = {\url{https://gitlab.tugraz.at/ivc/team_pock/research/bilevel_optimisation}},
-  year         = {2025}
-}
-```
 ## References
 
 <a id="1">[1]</a> 
@@ -232,8 +227,6 @@ Chen, Y., Ranftl, R. and Pock, T., 2014.
 Insights into analysis operator learning: From patch-based sparse models to
 higher order MRFs. 
 IEEE Transactions on Image Processing, 23(3), pp.1060-1072.
-
-## Acknowledgements
 
 ## License
 
