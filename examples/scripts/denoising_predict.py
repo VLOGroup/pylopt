@@ -20,8 +20,7 @@ def load_data_from_file(root_path: str, file_name: str) -> torch.Tensor:
     return torch.load(file_path)
 
 def denoise(config: Configuration):
-    # device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    device = torch.device('cpu')
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     dtype = parse_datatype(config)
 
     test_data_root_dir = config['data']['dataset']['test']['root_dir'].get()

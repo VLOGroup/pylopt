@@ -21,7 +21,8 @@ class StudentT(Potential):
         state = super().state_dict(*args, **kwargs)
         return state
 
+    def initialisation_dict(self) -> Dict[str, Any]:
+        return {}
+
     def load_state_dict(self, state_dict: Mapping[str, Any], *args, **kwargs) -> None:
-        if '_arch' in state_dict.keys():
-            state_dict.pop('_arch')
         super().load_state_dict(state_dict, *args, **kwargs)

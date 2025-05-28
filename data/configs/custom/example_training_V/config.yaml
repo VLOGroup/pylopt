@@ -6,12 +6,9 @@ regulariser:
         num_components: 37
         box_lower: -3.0
         box_upper: 3.0
-        weights:
-          initialisation:
-            parameters:
-              name: 'uniform'
+        initialisation:
+          name: 'rand'
         trainable: True
-
   filters:
     padding_mode: 'reflect'
     initialisation:

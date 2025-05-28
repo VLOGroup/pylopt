@@ -78,7 +78,7 @@ def train_bilevel(config: Configuration):
     writer = SummaryWriter(log_dir=os.path.join(path_to_eval_dir, 'tensorboard'))
 
     evaluation_freq = 2
-    max_num_iterations = 2000
+    max_num_iterations = 1000
     for k, batch in enumerate(train_loader):
 
         batch_ = batch.to(device=device, dtype=dtype)
@@ -112,6 +112,9 @@ def train_bilevel(config: Configuration):
                 psnr_list.append(psnr)
                 test_loss_list.append(test_loss)
 
+                save_foe_model(regulariser, os.path.join(path_to_eval_dir, 'models'),
+                               model_dir_name='model_{:s}'.format(str(k + 1).zfill(6)))
+
             if (k + 1) == max_num_iterations:
                 logging.info('[TRAIN] reached maximal number of iterations')
                 writer.close()
@@ -119,7 +122,7 @@ def train_bilevel(config: Configuration):
             else:
                 k += 1
 
-    save_foe_model(regulariser, path_to_eval_dir)
+    save_foe_model(regulariser, os.path.join(path_to_eval_dir, 'models'), model_dir_name='final')
 
     visualise_training_stats(train_loss_list, test_loss_list, psnr_list, evaluation_freq, path_to_eval_dir)
     visualise_filter_stats(filters_list, filter_weights_list, path_to_eval_dir)

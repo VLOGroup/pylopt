@@ -19,10 +19,13 @@ class Potential(ABC, torch.nn.Module):
     def forward_negative_log(self, x: torch.Tensor) -> torch.Tensor:
         pass
 
-    @abstractmethod
     def state_dict(self, *args, **kwargs) -> Dict[str, Any]:
         state = super().state_dict(*args, **kwargs)
         return state
+
+    @abstractmethod
+    def initialisation_dict(self)  -> Dict[str, Any]:
+        pass
 
     @abstractmethod
     def load_state_dict(self, state_dict: Mapping[str, Any], *args, **kwargs) -> None:

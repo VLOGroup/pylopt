@@ -76,49 +76,25 @@ def load_filter_weights_spec(config: Configuration, num_filters: int) -> ParamSp
 
     return ParamSpec(filter_weights, trainable=trainable, projection=lambda z: torch.clamp(z, min=0.00001))
 
-def load_gmm_weights_spec(config: Configuration) -> ParamSpec:
-    weights = None
-    potential_params = config['regulariser']['potential']['parameters'].get()
+def load_gmm_log_weights_spec(config: Configuration, num_filters: int) -> ParamSpec:
+    log_weights = None
+    potential_params = config['regulariser']['potential']['parameters']['gmm'].get()
     num_components = potential_params['num_components']
-    trainable = potential_params['weights']['trainable']
-    weights_file = potential_params['weights']['initialisation']['file']
+    trainable = potential_params['trainable']
+    weights_file = config['regulariser']['potential']['parameters']['gmm']['initialisation']['file'].get()
     if weights_file:
         package_root_path = Path(__file__).resolve().parents[2]
-        weights = torch.load(os.path.join(package_root_path, weights_file))
+        log_weights = torch.load(os.path.join(package_root_path, weights_file))
     else:
-        weights_params = potential_params['weights']['initialisation']['parameters']
+        log_weights_params = potential_params['initialisation']
 
-        # TODO
-        #   > clean me up!!
+        if log_weights_params['name'] == 'uniform':
+            log_weights = torch.ones(num_filters, num_components)
 
-        # box_lower = potential_params['box_lower']
-        # box_upper = potential_params['box_upper']
-        # centers = torch.linspace(box_lower, box_upper, num_components)
-        #
-        # sig = 2 * (box_upper - box_lower) / (num_components - 1)
-        # sig_sq = sig ** 2
-        #
-        # weights = np.sqrt(2 * np.pi * sig_sq) / (torch.pi * (1 + centers ** 2))
-        # weights = unit_simplex_projection(weights)
+        if log_weights_params['name'] == 'rand':
+            log_weights = 2 * torch.rand(num_filters, num_components) - 1
 
-                # # debug
-                # from matplotlib import pyplot as plt
-                # fig = plt.figure()
-                # ax = fig.add_subplot(1, 1, 1)
-                # t = np.linspace(-3, 3, 333)
-                # ax.plot(t, 1 / (np.pi * (1 + t ** 2)))
-                # y =  np.exp((-0.5 / sig_sq) * (t.reshape(-1, 1) - centers.detach().cpu().numpy().reshape(1, -1))**2) / np.sqrt(2 * np.pi * sig_sq)
-                #
-                # ax.plot(t, 1 / (np.pi * (1 + t ** 2)), color='green')
-                # ax.plot(t, np.sum(weights.detach().cpu().numpy() * y, axis=-1), color='orange')
-                # plt.show()
-
-        #
-        # if weights_params['name'] == 'uniform':
-        #     weights = torch.ones(num_components)
-        #     weights *= weights_params['multiplier']
-
-    return ParamSpec(weights, trainable=trainable, projection=unit_simplex_projection)
+    return ParamSpec(log_weights, trainable=trainable)
 
 def set_up_regulariser(config: Configuration) -> torch.nn.Module:
     filters_spec = load_filters_spec(config)
@@ -127,29 +103,38 @@ def set_up_regulariser(config: Configuration) -> torch.nn.Module:
 
     potential_name = config['regulariser']['potential']['name'].get()
     if potential_name == 'GaussianMixture':
-        potential_file = config['regulariser']['potential']['file'].get()
         gmm_params = config['regulariser']['potential']['parameters']['gmm'].get()
+        potential_file = config['regulariser']['potential']['parameters']['gmm']['initialisation']['file'].get()
         trainable = gmm_params['trainable']
+
         if potential_file:
+            # dummy initialisation
             package_root_path = Path(__file__).resolve().parents[2]
             model_data_file = os.path.join(package_root_path, potential_file)
             model_data = torch.load(model_data_file)
+            initialisation_dict = model_data['initialisation_dict']
+            num_gmms = initialisation_dict['num_gmms'].item()
+            num_components = initialisation_dict['num_components'].item()
+            dummy_log_weights = 2 * torch.ones(num_filters, num_components) - 1
+            dummy_log_weights_spec = ParamSpec(dummy_log_weights, trainable=trainable)
 
-            # dummy weight initialisation
-            num_components = model_data['_arch']['num_components']
-            arch = model_data['_arch']
-            arch['weights_spec'] = ParamSpec(-torch.ones(num_components), trainable=trainable)
+            potential_ = GaussianMixture(num_components=num_components,
+                                        box_lower=initialisation_dict['box_lower'].item(),
+                                        box_upper=initialisation_dict['box_upper'].item(),
+                                        log_weights_spec=dummy_log_weights_spec,
+                                        num_gmms=num_gmms)
 
-            potential_ = GaussianMixture(**arch)
-            potential_.load_state_dict(model_data)
+            # load state dict
+            state_dict = model_data['state_dict']
+            potential_.load_state_dict(state_dict)
         else:
             num_components = gmm_params['num_components']
             box_lower = gmm_params['box_lower']
             box_upper = gmm_params['box_upper']
-            trainable = trainable
-            log_weights_spec = ParamSpec(value=2 * torch.rand(num_filters, num_components) - 1, trainable=trainable)
+
+            log_weights_spec = load_gmm_log_weights_spec(config, num_filters)
             potential_ = GaussianMixture(num_components=num_components, box_lower=box_lower, box_upper=box_upper,
-                                         log_weights_spec=log_weights_spec, num_filters=num_filters)
+                                         log_weights_spec=log_weights_spec, num_gmms=num_filters)
     elif potential_name == 'StudentT':
         potential_ = StudentT()
     else:

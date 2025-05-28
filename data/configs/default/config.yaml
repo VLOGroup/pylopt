@@ -1,16 +1,14 @@
 regulariser:
   potential:
     name: 'StudentT'                      # values in ['StudentT', 'GaussianMixture']
-    file: ''
-    parameters:                           # if file is specified, parameters will be ignored
+    parameters:
       gmm:                                # NOTE that there is no need for parameter specification for 'StudentT'
         num_components: 125
         box_lower: -1.0
         box_upper: 1.0
-        weights:
-          initialisation:
-            parameters:
-              name: 'uniform'
+        initialisation:
+          file: ''                       # if file is specified, 'name' will be ignored
+          name: 'uniform'
         trainable: True
   filters:
     padding_mode: 'reflect'
