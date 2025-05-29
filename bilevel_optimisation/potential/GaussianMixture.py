@@ -1,8 +1,5 @@
 from typing import Dict, Any, Mapping
 import torch
-from torch.autograd import Function
-from torch.autograd.function import FunctionCtx
-import logsumexp as lse
 
 from bilevel_optimisation.data.ParamSpec import ParamSpec
 from bilevel_optimisation.potential.Potential import Potential
@@ -24,8 +21,7 @@ class GaussianMixture(Potential):
         self.register_buffer('box_upper', torch.tensor(box_upper, dtype=torch.float32))
         self.register_buffer('num_gmms', torch.tensor(num_gmms, dtype=torch.uint16))
 
-        centers = torch.linspace(start=self.box_lower, end=self.box_upper,
-                                 steps=self.num_components)
+        centers = torch.linspace(start=self.box_lower, end=self.box_upper, steps=self.num_components)
         self.centers = torch.nn.Parameter(centers, requires_grad=False)
 
         std_dev = 2 * (self.box_upper - self.box_lower) / (self.num_components.to(dtype=torch.float32) - 1)
