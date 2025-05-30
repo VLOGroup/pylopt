@@ -17,7 +17,8 @@ regulariser:
 inner_energy:
   lam: 0.5
   optimiser:
-    name: 'AlternatingNAGOptimiser'
+    name: 'NAGOptimiser'
+    use_prox: False
     stopping:
       name: 'EarlyStopping'
       parameters: {max_num_iterations: 1000, rel_tol: 0.00001}

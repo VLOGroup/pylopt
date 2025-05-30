@@ -39,10 +39,11 @@ inner_energy:
   type: 'OptimisationEnergy'          # values in ['OptimisationEnergy', 'UnrollingEnergy']
   lam: 0.1
   optimiser:
-    name: 'NAGOptimiser'              # values in 'NAGOptimiser', 'AlternatingNAGOptimiser', or any PyTorch optimiser
-    parameters: {}
-    stopping:
-      name: 'FixedIterationsStopping'
+    name: 'NAGOptimiser'                      # values in 'NAGOptimiser', 'AlternatingNAGOptimiser', or any PyTorch optimiser
+    use_prox: False                           # current implementation supports proximal gradient method only for
+    parameters: {}                            #   'NAGOptimiser', 'AlternatingNAGOptimiser'
+    stopping:                                 # the proximal map needs to be specified in SetupUtils.set_up_inner_energy(). for all
+      name: 'FixedIterationsStopping'         # the other optimiser the use_prox flag is ignored.
       parameters: {max_num_iterations: 1000}
 
 bilevel:

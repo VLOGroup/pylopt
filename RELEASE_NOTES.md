@@ -4,21 +4,23 @@
 
 ### Features
 
-- Usage of CUDA kernel to speed up training and prediction with gmm potentials
-- Improvement of setup utilities: Currently paths to filters, weights, ecc. need to
-provided  in terms of absolute oaths
+- Use CUDA kernel to speed up training and prediction with gmm potentials
+- Use filter_weights as parameters of the StudentT potential only
+- Improve handling of proximal maps
 
 ## [1.1.0]
 
 ### Features
 
-- Decrease required Python version from Python 3.12 to Python 3.11. This makes sure that
+- Decreased required Python version from Python 3.12 to Python 3.11. This makes sure that
 the package can be used in Google Colab.
-- Moved config and model directory into root directory of package 
+- Moved config and model directory into root directory of package
+- Made usage of proximal gradient method for NAG-type optimisers configurable. 
+- Use MANIFEST.in to include all the non *.py files belonging to the package to the Python wheel.
 
 ### Fixes
 
-- Remove unnecessary imports
+- Removed unnecessary imports
 
 ## [1.0.0]
 

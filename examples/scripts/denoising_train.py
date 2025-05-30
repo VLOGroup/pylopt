@@ -64,13 +64,13 @@ def train_bilevel(config: Configuration):
     log_trainable_params_stats(regulariser, logging_module='train')
     path_to_eval_dir = create_evaluation_dir(config)
 
-    logging.info('[TRAIN] compute initial test loss and initial psnr')
-    psnr, test_loss = evaluate_on_test_data(test_loader, regulariser, config, device,
-                                            dtype, -1, path_to_data_dir=None)
-
+    # logging.info('[TRAIN] compute initial test loss and initial psnr')
+    # psnr, test_loss = evaluate_on_test_data(test_loader, regulariser, config, device,
+    #                                         dtype, -1, path_to_data_dir=None)
+    #
     train_loss_list = []
-    test_loss_list = [test_loss]
-    psnr_list = [psnr]
+    test_loss_list = [-1]
+    psnr_list = [-1]
 
     filters_list = []
     filter_weights_list = []

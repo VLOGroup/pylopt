@@ -10,8 +10,6 @@ from bilevel_optimisation import optimiser
 from bilevel_optimisation import solver
 from bilevel_optimisation import losses
 from bilevel_optimisation import energy
-from bilevel_optimisation.optimiser import FixedIterationsStopping
-from bilevel_optimisation.optimiser.ProjectedOptimiser import create_projected_optimiser
 from bilevel_optimisation.bilevel.Bilevel import Bilevel
 from bilevel_optimisation.data.OptimiserSpec import OptimiserSpec
 from bilevel_optimisation.data.ParamSpec import ParamSpec
@@ -20,6 +18,9 @@ from bilevel_optimisation.energy.InnerEnergy import InnerEnergy
 from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
 from bilevel_optimisation.factories.BuildFactory import build_solver_factory
 from bilevel_optimisation.factories.BuildFactory import build_optimiser_factory, build_prox_map_factory
+from bilevel_optimisation.optimiser import FixedIterationsStopping
+from bilevel_optimisation.optimiser.ProjectedOptimiser import create_projected_optimiser
+from bilevel_optimisation.optimiser import NAG_TYPE_OPTIMISER
 from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementModel
 from bilevel_optimisation.potential import GaussianMixture, StudentT
 from bilevel_optimisation.projection.ParameterProjections import zero_mean_projection
@@ -202,8 +203,12 @@ def set_up_inner_energy(measurement_model, regulariser, config: Configuration) -
     else:
         stopping_cls = FixedIterationsStopping(max_num_iterations=1000)
 
-    prox_map = lambda x, y, tau: (tau * y + x) / (1 + tau)
-    prox_map_factory = build_prox_map_factory(prox_map)
+    prox_map_factory = None
+    if config['inner_energy']['optimiser']['use_prox'].get() and optimiser_name in NAG_TYPE_OPTIMISER:
+        noise_level = config['measurement_model']['noise_level'].get()
+        prox_map = lambda x, y, tau: ((tau / noise_level) * y + x) / (1 + (tau / noise_level))
+        prox_map_factory = build_prox_map_factory(prox_map)
+
     optimiser_spec = OptimiserSpec(optimiser_class=optimiser_cls, optimiser_params=optimiser_params,
                                    stopping_class=stopping_cls, stopping_params=stopping_parameters,
                                    prox_map_factory=prox_map_factory)

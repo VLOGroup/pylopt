@@ -4,7 +4,7 @@ regulariser:
   filters:
     padding_mode: 'reflect'
     initialisation:
-      file: '/home/florianthaler/Documents/research/bilevel_optimisation/data/pretrained_models/foe_filters_7x7_chen-ranftl-pock_2014.pt'
+      file: 'foe_filters_7x7_chen-ranftl-pock_2014.pt'
       multiplier: 255.0
     trainable: True
   filter_weights:
