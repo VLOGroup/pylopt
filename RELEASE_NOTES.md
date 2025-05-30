@@ -14,7 +14,8 @@
 
 - Decreased required Python version from Python 3.12 to Python 3.11. This makes sure that
 the package can be used in Google Colab.
-- Moved config and model directory into root directory of package
+- Moved config and model directory from project directory into root directory of package
+- Moved examples from project directory into root directory of package
 - Made usage of proximal gradient method for NAG-type optimisers configurable. 
 - Use MANIFEST.in to include all the non *.py files belonging to the package to the Python wheel.
 
