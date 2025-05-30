@@ -19,7 +19,7 @@ measurement_model:
 
 inner_energy:
   type: 'OptimisationEnergy'          # values in ['OptimisationEnergy', 'UnrollingEnergy']
-  lam: 0.005
+  lam: 0.5
   optimiser:
     name: 'NAGOptimiser'
     parameters: {lip_const_default: 1024}

@@ -8,7 +8,7 @@ import argparse
 
 from bilevel_optimisation.utils.LoggingUtils import setup_logger
 from bilevel_optimisation.utils.SeedingUtils import seed_random_number_generators
-from bilevel_optimisation.utils.ConfigUtils import load_configs, parse_datatype, locate_custom_config_in_package
+from bilevel_optimisation.utils.ConfigUtils import load_app_config, parse_datatype
 from bilevel_optimisation.utils.SetupUtils import (set_up_regulariser, set_up_measurement_model,
                                                    set_up_inner_energy)
 from bilevel_optimisation.dataset.ImageDataset import TestImageDataset
@@ -73,22 +73,18 @@ def main():
     log_dir_path = './data'
     setup_logger(data_dir_path=log_dir_path, log_level_str='info')
 
-    # specify config directory by calling f.e.
-    #   python example_denoising_predict.py --configs example_prediction_I
+    # specify config directory via command line argument
+    #   1. Usage of custom configuration contained in bilevel_optimisation.config_data.custom
+    #       python example_denoising_predict.py --configs example_prediction_I
+    #   2. Usage of custom configuration in file system
+    #       python example_denoising_predict.py --configs <path_to_custom_config_dir>
     parser = argparse.ArgumentParser()
     parser.add_argument('--configs')
     args = parser.parse_args()
-    default_config_dir_path = os.path.join('bilevel_optimisation', 'config_data', 'default')
+    app_name = 'bilevel_optimisation'
+    configuring_module = '[DENOISING] predict'
+    config = load_app_config(app_name, args, configuring_module)
 
-    path_to_custom_config = locate_custom_config_in_package(args.configs)
-    if path_to_custom_config:
-        config = load_configs('[DENOISING] predict', default_config_dir_path=default_config_dir_path,
-                              custom_config_dir_path=path_to_custom_config, configuring_module='train')
-    else:
-        # specified config subdirectory is not contained in package - it is assumed to be a valid path to
-        # custom config directory in the file system
-        config = load_configs('[DENOISING] predict', default_config_dir_path=default_config_dir_path,
-                              custom_config_dir_path=args.config, configuring_module='train')
 
     denoise(config)
 

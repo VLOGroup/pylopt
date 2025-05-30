@@ -16,7 +16,7 @@ from bilevel_optimisation.utils.FileSystemUtils import create_evaluation_dir, sa
 from bilevel_optimisation.utils.SetupUtils import (set_up_regulariser, set_up_bilevel_problem,
                                                    set_up_measurement_model, set_up_inner_energy,
                                                    set_up_outer_loss)
-from bilevel_optimisation.utils.ConfigUtils import load_configs, parse_datatype
+from bilevel_optimisation.utils.ConfigUtils import parse_datatype, load_app_config
 from bilevel_optimisation.visualisation.Visualisation import (visualise_training_stats, visualise_filter_stats,
                                                               visualise_filters, visualise_gmm_potential)
 
@@ -64,13 +64,13 @@ def train_bilevel(config: Configuration):
     log_trainable_params_stats(regulariser, logging_module='train')
     path_to_eval_dir = create_evaluation_dir(config)
 
-    # logging.info('[TRAIN] compute initial test loss and initial psnr')
-    # psnr, test_loss = evaluate_on_test_data(test_loader, regulariser, config, device,
-    #                                         dtype, -1, path_to_data_dir=None)
-    #
+    logging.info('[TRAIN] compute initial test loss and initial psnr')
+    psnr, test_loss = evaluate_on_test_data(test_loader, regulariser, config, device,
+                                            dtype, -1, path_to_data_dir=None)
+
     train_loss_list = []
-    test_loss_list = [-1]
-    psnr_list = [-1]
+    test_loss_list = [test_loss]
+    psnr_list = [psnr]
 
     filters_list = []
     filter_weights_list = []
@@ -78,7 +78,7 @@ def train_bilevel(config: Configuration):
     writer = SummaryWriter(log_dir=os.path.join(path_to_eval_dir, 'tensorboard'))
 
     evaluation_freq = 2
-    max_num_iterations = 10
+    max_num_iterations = 200
     try:
         for k, batch in enumerate(train_loader):
 
@@ -134,15 +134,18 @@ def main():
     log_dir_path = './data'
     setup_logger(data_dir_path=log_dir_path, log_level_str='info')
 
-    # specify config directory by calling f.e.
-    #   python example_denoising_train.py --configs example_training_IV
+    # specify config directory via command line argument
+    #   1. Usage of custom configuration contained in bilevel_optimisation.config_data.custom
+    #       python example_denoising_train.py --configs example_prediction_I
+    #   2. Usage of custom configuration in file system
+    #       python example_denoising_train.py --configs <path_to_custom_config_dir>
     parser = argparse.ArgumentParser()
     parser.add_argument('--configs')
     args = parser.parse_args()
-    default_config_dir_path = os.path.join('bilevel_optimisation', 'config_data', 'default')
-    custom_config_dir_path = os.path.join('bilevel_optimisation', 'config_data', 'custom', args.configs)
-    config = load_configs('[DENOISING] train', default_config_dir_path=default_config_dir_path,
-                          custom_config_dir_path=custom_config_dir_path, configuring_module='train')
+    app_name = 'bilevel_optimisation'
+    configuring_module = '[DENOISING] train'
+    config = load_app_config(app_name, args, configuring_module)
+
     train_bilevel(config)
 
 if __name__ == '__main__':

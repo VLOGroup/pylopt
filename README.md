@@ -137,9 +137,9 @@ Concrete and executable code for training and prediction is contained in `stocha
     python examples/denoising_train --configs example_training_I 
     ```
 
-  |               Training stats                |               Test triplet                |
-  |:-------------------------------------------:|:-----------------------------------------:|
-  | ![](./images/training_stats_training_I.png) | ![](./images/test_triplet_training_I.png) |
+  |                   Training stats                    |                   Test triplet                    |
+  |:---------------------------------------------------:|:-------------------------------------------------:|
+  | ![](./images/results/training_stats_training_I.png) | ![](./images/results/test_triplet_training_I.png) |
 
   Note that already after very iterations, we obtain a notable denoising performance. The main 
   reason for this behaviour is the nearly optimal initialisation of the filters. 
@@ -165,7 +165,7 @@ Concrete and executable code for training and prediction is contained in `stocha
   The training results are consistent with the results obtained in Example I. Notably, although the filters 
   are trainable, their $l^{2}$-norm remains nearly constant throughout the training process:
 
-  ![](./images/filter_stats_training_II.png)
+  ![](./images/results/filter_stats_training_II.png)
 
 - **Example III**
   - Potential: Student-t
@@ -186,9 +186,9 @@ Concrete and executable code for training and prediction is contained in `stocha
 
   We obtain similar denoising results as before:
 
-  |                 Training stats                 |                Filter stats                 |                Test triplet                 |
-  |:----------------------------------------------:|:-------------------------------------------:|:-------------------------------------------:|
-  | ![](./images/training_stats_training_III.png)  | ![](./images/filter_stats_training_III.png) | ![](./images/test_triplet_training_III.png) |
+  |                    Training stats                     |                    Filter stats                     |                    Test triplet                     |
+  |:-----------------------------------------------------:|:---------------------------------------------------:|:---------------------------------------------------:|
+  | ![](./images/results/training_stats_training_III.png) | ![](./images/results/filter_stats_training_III.png) | ![](./images/results/test_triplet_training_III.png) |
 
 - **Example IV** 
   - Potential: Student-t
