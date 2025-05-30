@@ -29,7 +29,7 @@ def denoise(config: Configuration):
                              collate_fn=lambda x: collate_function(x, crop_size=-1))
 
     regulariser = set_up_regulariser(config)
-    regulariser = regulariser.to(device=device, dtype=torch.float64)
+    regulariser = regulariser.to(device=device, dtype=dtype)
 
     test_batch = list(test_loader)[0]
     test_batch_ = test_batch.to(device=device, dtype=dtype)
@@ -83,8 +83,7 @@ def main():
     args = parser.parse_args()
     app_name = 'bilevel_optimisation'
     configuring_module = '[DENOISING] predict'
-    config = load_app_config(app_name, args, configuring_module)
-
+    config = load_app_config(app_name, args.configs, configuring_module)
 
     denoise(config)
 

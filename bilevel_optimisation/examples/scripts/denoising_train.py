@@ -144,7 +144,7 @@ def main():
     args = parser.parse_args()
     app_name = 'bilevel_optimisation'
     configuring_module = '[DENOISING] train'
-    config = load_app_config(app_name, args, configuring_module)
+    config = load_app_config(app_name, args.configs, configuring_module)
 
     train_bilevel(config)
 
