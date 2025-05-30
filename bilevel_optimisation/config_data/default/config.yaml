@@ -13,7 +13,7 @@ regulariser:
   filters:
     padding_mode: 'reflect'
     initialisation:
-      file: 'data/pretrained_models/foe_filters_7x7_chen-ranftl-pock_2014.pt'
+      file: 'foe_filters_7x7_chen-ranftl-pock_2014.pt'
       multiplier: 255.0           # floating point value the filters initially will be multiplied
                                   # NOTE:
                                   #   > the filters [...]chen-ranftl-pock_2014.pt were trained with
@@ -26,7 +26,7 @@ regulariser:
   filter_weights:
     initialisation:
       file: ''
-      multiplier: 0.000001      # floating point value the filters initially will be multiplied
+      multiplier: 0.000001      # floating point value the filters initially will be multiplied with
       parameters:               # if file is specified, parameters will be ignored
         name: 'uniform'         # values in ['uniform', 'rand', 'randn']
     trainable: True
@@ -39,7 +39,7 @@ inner_energy:
   type: 'OptimisationEnergy'          # values in ['OptimisationEnergy', 'UnrollingEnergy']
   lam: 0.1
   optimiser:
-    name: 'NAGOptimiser'              # values in 'NAGOptimiser', 'AlternatingNAGOptimiser'
+    name: 'NAGOptimiser'              # values in 'NAGOptimiser', 'AlternatingNAGOptimiser', or any PyTorch optimiser
     parameters: {}
     stopping:
       name: 'FixedIterationsStopping'
@@ -48,10 +48,10 @@ inner_energy:
 bilevel:
   loss: 'L2Loss'
   optimiser:
-    name: 'NAGOptimiser'
+    name: 'NAGOptimiser'              # same as for optimiser above
     parameters: {beta: 0.71, lip_const_default: 10000000}
   solver:
-    name: 'CGSolver'
+    name: 'CGSolver'                  # only 'GCSolver' is available
     parameters: {max_num_iterations: 500, abs_tol: 0.000001, rel_tol: 0.000001}
 
 data:
@@ -63,3 +63,5 @@ data:
       crop_size: 64
     test:
       root_dir: 'TODO: fill me'
+  models:
+    root_dir: ''                  # if not specified, 'bilevel_optimisation/model_data' is used to load models from

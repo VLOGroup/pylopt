@@ -3,6 +3,7 @@ from confuse import Configuration
 from typing import Optional
 import torch
 import logging
+from importlib import resources
 
 TYPE_DICT = {'float16': torch.float16, 'float32': torch.float32, 'float64': torch.float64}
 
@@ -22,3 +23,15 @@ def parse_datatype(config: Configuration) -> Optional[torch.dtype]:
     if type_str in TYPE_DICT.keys():
         dtype = TYPE_DICT[type_str]
     return dtype
+
+def locate_custom_config_in_package(subdir_name: str) -> Optional[str]:
+    package_root = resources.files('bilevel_optimisation')
+    custom_config_dir = os.path.join(package_root, 'config_data', 'custom')
+    custom_config_subdir_list = [d for d in os.listdir(custom_config_dir)
+                                 if os.path.isdir(os.path.join(custom_config_dir, d))]
+
+    ret_val = None
+    if subdir_name in custom_config_subdir_list:
+        ret_val = os.path.join(custom_config_dir, subdir_name)
+
+    return ret_val

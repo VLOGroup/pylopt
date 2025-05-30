@@ -1,3 +1,4 @@
+import os
 import numpy as np
 import torch
 from confuse import Configuration
@@ -23,8 +24,12 @@ from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementM
 from bilevel_optimisation.potential import GaussianMixture, StudentT
 from bilevel_optimisation.projection.ParameterProjections import zero_mean_projection
 
-def get_package_root_path() -> str:
-    return resources.files('bilevel_optimisation').parent
+def get_model_data_dir_path(config: Configuration) -> str:
+    models_root_dir = config['data']['models']['root_dir'].get()
+    model_data_dir = os.path.join(resources.files('bilevel_optimisation'), 'model_data')
+    if models_root_dir:
+        model_data_dir = models_root_dir
+    return model_data_dir
 
 def load_filters_spec(config: Configuration) -> ParamSpec:
     filters = None
@@ -35,7 +40,8 @@ def load_filters_spec(config: Configuration) -> ParamSpec:
     filters_multiplier = config['regulariser']['filters']['initialisation']['multiplier'].get()
 
     if filters_file:
-        filters = torch.load(filters_file)
+        model_data_dir_path = get_model_data_dir_path(config)
+        filters = torch.load(os.path.join(model_data_dir_path, filters_file))
     else:
         filters_params = config['regulariser']['filters']['initialisation']['parameters'].get()
         filter_dim = filters_params['filter_dim']
@@ -64,7 +70,8 @@ def load_filter_weights_spec(config: Configuration, num_filters: int) -> ParamSp
     filter_weights_file = config['regulariser']['filter_weights']['initialisation']['file'].get()
     filter_weights_multiplier = config['regulariser']['filter_weights']['initialisation']['multiplier'].get()
     if filter_weights_file:
-        filter_weights = torch.load(filter_weights_file)
+        model_data_dir_path = get_model_data_dir_path(config)
+        filter_weights = torch.load(os.path.join(model_data_dir_path, filter_weights_file))
     else:
         filter_weights_params = config['regulariser']['filter_weights']['initialisation']['parameters'].get()
 

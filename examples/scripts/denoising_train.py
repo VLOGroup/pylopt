@@ -78,54 +78,55 @@ def train_bilevel(config: Configuration):
     writer = SummaryWriter(log_dir=os.path.join(path_to_eval_dir, 'tensorboard'))
 
     evaluation_freq = 2
-    max_num_iterations = 1000
-    for k, batch in enumerate(train_loader):
+    max_num_iterations = 10
+    try:
+        for k, batch in enumerate(train_loader):
 
-        batch_ = batch.to(device=device, dtype=dtype)
-        with torch.no_grad():
-            measurement_model = set_up_measurement_model(batch_, config)
-            inner_energy = set_up_inner_energy(measurement_model, regulariser, config)
-            inner_energy = inner_energy.to(device=device, dtype=dtype)
+            batch_ = batch.to(device=device, dtype=dtype)
+            with torch.no_grad():
+                measurement_model = set_up_measurement_model(batch_, config)
+                inner_energy = set_up_inner_energy(measurement_model, regulariser, config)
+                inner_energy = inner_energy.to(device=device, dtype=dtype)
 
-            outer_loss = set_up_outer_loss(batch_, config)
-            train_loss = bilevel.forward(outer_loss, inner_energy)
+                outer_loss = set_up_outer_loss(batch_, config)
+                train_loss = bilevel.forward(outer_loss, inner_energy)
 
-            train_loss_list.append(train_loss.detach().cpu().item())
-            filters_list.append(regulariser.get_filters())
-            filter_weights_list.append(regulariser.get_filter_weights())
-            logging.info('[TRAIN] iteration [{:d} / {:d}]: '
-                         'loss = {:.5f}'.format(k + 1, max_num_iterations, train_loss.detach().cpu().item()))
+                train_loss_list.append(train_loss.detach().cpu().item())
+                filters_list.append(regulariser.get_filters())
+                filter_weights_list.append(regulariser.get_filter_weights())
+                logging.info('[TRAIN] iteration [{:d} / {:d}]: '
+                             'loss = {:.5f}'.format(k + 1, max_num_iterations, train_loss.detach().cpu().item()))
 
-            log_gradient_norms(regulariser, writer, k + 1)
+                log_gradient_norms(regulariser, writer, k + 1)
 
-            if (k + 1) % evaluation_freq == 0:
-                logging.info('[TRAIN] evaluate on test dataset')
+                if (k + 1) % evaluation_freq == 0:
+                    logging.info('[TRAIN] evaluate on test dataset')
 
-                psnr, test_loss = evaluate_on_test_data(test_loader, regulariser, config, device,
-                                                        dtype, k, path_to_eval_dir)
-                visualise_intermediate_results(regulariser, device, dtype, k, path_to_eval_dir)
+                    psnr, test_loss = evaluate_on_test_data(test_loader, regulariser, config, device,
+                                                            dtype, k, path_to_eval_dir)
+                    visualise_intermediate_results(regulariser, device, dtype, k, path_to_eval_dir)
 
-                logging.info('[TRAIN] denoised test images')
-                logging.info('[TRAIN]   > average psnr: {:.5f}'.format(psnr))
-                logging.info('[TRAIN]   > test loss: {:.5f}'.format(test_loss))
+                    logging.info('[TRAIN] denoised test images')
+                    logging.info('[TRAIN]   > average psnr: {:.5f}'.format(psnr))
+                    logging.info('[TRAIN]   > test loss: {:.5f}'.format(test_loss))
 
-                psnr_list.append(psnr)
-                test_loss_list.append(test_loss)
+                    psnr_list.append(psnr)
+                    test_loss_list.append(test_loss)
 
-                save_foe_model(regulariser, os.path.join(path_to_eval_dir, 'models'),
-                               model_dir_name='model_{:s}'.format(str(k + 1).zfill(6)))
+                    save_foe_model(regulariser, os.path.join(path_to_eval_dir, 'models'),
+                                   model_dir_name='model_{:s}'.format(str(k + 1).zfill(6)))
 
-            if (k + 1) == max_num_iterations:
-                logging.info('[TRAIN] reached maximal number of iterations')
-                writer.close()
-                break
-            else:
-                k += 1
+                if (k + 1) == max_num_iterations:
+                    logging.info('[TRAIN] reached maximal number of iterations')
+                    writer.close()
+                    break
+                else:
+                    k += 1
+    finally:
+        save_foe_model(regulariser, os.path.join(path_to_eval_dir, 'models'), model_dir_name='final')
 
-    save_foe_model(regulariser, os.path.join(path_to_eval_dir, 'models'), model_dir_name='final')
-
-    visualise_training_stats(train_loss_list, test_loss_list, psnr_list, evaluation_freq, path_to_eval_dir)
-    visualise_filter_stats(filters_list, filter_weights_list, path_to_eval_dir)
+        visualise_training_stats(train_loss_list, test_loss_list, psnr_list, evaluation_freq, path_to_eval_dir)
+        visualise_filter_stats(filters_list, filter_weights_list, path_to_eval_dir)
 
 def main():
     seed_random_number_generators(123)
@@ -138,8 +139,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--configs')
     args = parser.parse_args()
-    default_config_dir_path = os.path.join('./data', 'configs', 'default')
-    custom_config_dir_path = os.path.join('./data', 'configs', 'custom', args.configs)
+    default_config_dir_path = os.path.join('bilevel_optimisation', 'config_data', 'default')
+    custom_config_dir_path = os.path.join('bilevel_optimisation', 'config_data', 'custom', args.configs)
     config = load_configs('[DENOISING] train', default_config_dir_path=default_config_dir_path,
                           custom_config_dir_path=custom_config_dir_path, configuring_module='train')
     train_bilevel(config)
