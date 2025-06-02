@@ -32,7 +32,7 @@ def get_model_data_dir_path(config: Configuration) -> str:
         model_data_dir = models_root_dir
     return model_data_dir
 
-def load_filters_spec(config: Configuration) -> ParamSpec:
+def load_filters_spec(config: Configuration, device: torch.device) -> ParamSpec:
     filters = None
 
     trainable = config['regulariser']['filters']['trainable'].get()
@@ -42,7 +42,7 @@ def load_filters_spec(config: Configuration) -> ParamSpec:
 
     if filters_file:
         model_data_dir_path = get_model_data_dir_path(config)
-        filters = torch.load(os.path.join(model_data_dir_path, filters_file))
+        filters = torch.load(os.path.join(model_data_dir_path, filters_file), map_location=device)
     else:
         filters_params = config['regulariser']['filters']['initialisation']['parameters'].get()
         filter_dim = filters_params['filter_dim']
@@ -64,7 +64,7 @@ def load_filters_spec(config: Configuration) -> ParamSpec:
     return ParamSpec(filters, trainable=trainable, projection=zero_mean_projection,
                      parameters={'padding_mode': padding_mode})
 
-def load_filter_weights_spec(config: Configuration, num_filters: int) -> ParamSpec:
+def load_filter_weights_spec(config: Configuration, num_filters: int, device: torch.device) -> ParamSpec:
     filter_weights = None
 
     trainable = config['regulariser']['filter_weights']['trainable'].get()
@@ -72,7 +72,7 @@ def load_filter_weights_spec(config: Configuration, num_filters: int) -> ParamSp
     filter_weights_multiplier = config['regulariser']['filter_weights']['initialisation']['multiplier'].get()
     if filter_weights_file:
         model_data_dir_path = get_model_data_dir_path(config)
-        filter_weights = torch.load(os.path.join(model_data_dir_path, filter_weights_file))
+        filter_weights = torch.load(os.path.join(model_data_dir_path, filter_weights_file), map_location=device)
     else:
         filter_weights_params = config['regulariser']['filter_weights']['initialisation']['parameters'].get()
 
@@ -83,14 +83,14 @@ def load_filter_weights_spec(config: Configuration, num_filters: int) -> ParamSp
 
     return ParamSpec(filter_weights, trainable=trainable, projection=lambda z: torch.clamp(z, min=0.00001))
 
-def load_gmm_log_weights_spec(config: Configuration, num_filters: int) -> ParamSpec:
+def load_gmm_log_weights_spec(config: Configuration, num_filters: int, device: torch.device) -> ParamSpec:
     log_weights = None
     potential_params = config['regulariser']['potential']['parameters']['gmm'].get()
     num_components = potential_params['num_components']
     trainable = potential_params['trainable']
     weights_file = config['regulariser']['potential']['parameters']['gmm']['initialisation']['file'].get()
     if weights_file:
-        log_weights = torch.load(weights_file)
+        log_weights = torch.load(weights_file, map_location=device)
     else:
         log_weights_params = potential_params['initialisation']
 
@@ -102,10 +102,10 @@ def load_gmm_log_weights_spec(config: Configuration, num_filters: int) -> ParamS
 
     return ParamSpec(log_weights, trainable=trainable)
 
-def set_up_regulariser(config: Configuration) -> torch.nn.Module:
-    filters_spec = load_filters_spec(config)
+def set_up_regulariser(config: Configuration, device: torch.device) -> torch.nn.Module:
+    filters_spec = load_filters_spec(config, device=device)
     num_filters = filters_spec.value.shape[0]
-    filter_weights_spec = load_filter_weights_spec(config, num_filters=num_filters)
+    filter_weights_spec = load_filter_weights_spec(config, num_filters=num_filters, device=device)
 
     potential_name = config['regulariser']['potential']['name'].get()
     if potential_name == 'GaussianMixture':
@@ -116,11 +116,11 @@ def set_up_regulariser(config: Configuration) -> torch.nn.Module:
         if potential_file:
             # dummy initialisation
             model_data_file = potential_file
-            model_data = torch.load(model_data_file)
+            model_data = torch.load(model_data_file, map_location=device)
             initialisation_dict = model_data['initialisation_dict']
             num_gmms = initialisation_dict['num_gmms'].item()
             num_components = initialisation_dict['num_components'].item()
-            dummy_log_weights = 2 * torch.ones(num_filters, num_components) - 1
+            dummy_log_weights = torch.ones(num_filters, num_components)
             dummy_log_weights_spec = ParamSpec(dummy_log_weights, trainable=trainable)
 
             potential_ = GaussianMixture(num_components=num_components,

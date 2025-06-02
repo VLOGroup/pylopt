@@ -56,7 +56,7 @@ def train_bilevel(config: Configuration):
     test_loader = DataLoader(test_image_dataset, batch_size=len(test_image_dataset), shuffle=False,
                              collate_fn=lambda x: collate_function(x, crop_size=-1))
 
-    regulariser = set_up_regulariser(config)
+    regulariser = set_up_regulariser(config, device)
     regulariser = regulariser.to(device=device, dtype=torch.float64)
     bilevel = set_up_bilevel_problem(regulariser.parameters(), config)
     bilevel = bilevel.to(device=device, dtype=torch.float64)
