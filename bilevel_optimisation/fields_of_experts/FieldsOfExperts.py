@@ -1,26 +1,9 @@
 import logging
+import torch
 
 from bilevel_optimisation.filters.Filters import ImageFilter
 from bilevel_optimisation.potential.Potential import Potential
-
-import torch
-
-class Timer:
-    def __init__(self):
-        pass
-
-    def __enter__(self):
-        self.start = torch.cuda.Event(enable_timing=True)
-        self.end = torch.cuda.Event(enable_timing=True)
-
-        self.start.record()
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self.end.record()
-        torch.cuda.synchronize()
-
-        self.delta_time = self.start.elapsed_time(self.end)
+from bilevel_optimisation.utils.TimerUtils import Timer
 
 class FieldsOfExperts(torch.nn.Module):
     """
@@ -51,7 +34,12 @@ class FieldsOfExperts(torch.nn.Module):
     def get_potential(self) -> Potential:
         return self.potential
 
-    def forward(self, x: torch.Tensor) -> torch.Tensor:
+    def forward(self, x: torch.Tensor):
+        x_conv = self.image_filter(x)
+        neg_log_potential = self.potential.forward_negative_log(x_conv)
+        return torch.einsum('bfhw->', neg_log_potential)
+
+    def forward_(self, x: torch.Tensor) -> torch.Tensor:
         logging.debug('[FoE] evaluate regulariser')
         x_conv = self.image_filter(x)
         return torch.einsum('bfhw->', self.potential.forward_negative_log(x_conv))
