@@ -8,6 +8,10 @@
 - Use filter_weights as parameters of the StudentT potential only
 - Improve handling of proximal maps
 
+## [1.1.2]
+
+- In denoising notebook use custom config which is already checked in the repository.
+
 ## [1.1.1]
 
 ### Fixes
