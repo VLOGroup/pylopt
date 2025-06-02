@@ -1,18 +1,15 @@
 regulariser:
   potential:
     name: 'StudentT'
-  filters:
-    padding_mode: 'reflect'
-    initialisation:
-      file: 'foe_filters_7x7_chen-ranftl-pock_2014.pt'
-      multiplier: 255.0
+    parameters:
+      student_t:
+        initialisation:
+          multiplier: 0.001
+          parameters:
+            name: 'uniform'
+        trainable: True
+  image_filter:
     trainable: False
-  filter_weights:
-    initialisation:
-      multiplier: 0.001
-      parameters:
-        name: 'uniform'         # values in ['uniform']
-    trainable: True
 
 inner_energy:
   lam: 0.5

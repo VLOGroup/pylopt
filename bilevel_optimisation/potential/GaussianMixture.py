@@ -1,4 +1,4 @@
-from typing import Dict, Any, Mapping
+from typing import Dict, Any, Mapping, NamedTuple
 import torch
 
 from bilevel_optimisation.data.ParamSpec import ParamSpec
@@ -13,13 +13,12 @@ class GaussianMixture(Potential):
     be non-negative and sum to one.
     """
     def __init__(self, num_components: int, box_lower: float, box_upper: float,
-                 log_weights_spec: ParamSpec, num_gmms: int):
-        super().__init__()
+                 log_weights_spec: ParamSpec, num_potentials: int):
+        super().__init__(num_potentials=num_potentials)
 
         self.register_buffer('num_components', torch.tensor(num_components, dtype=torch.uint16))
         self.register_buffer('box_lower', torch.tensor(box_lower, dtype=torch.float32))
         self.register_buffer('box_upper', torch.tensor(box_upper, dtype=torch.float32))
-        self.register_buffer('num_gmms', torch.tensor(num_gmms, dtype=torch.uint16))
 
         centers = torch.linspace(start=self.box_lower, end=self.box_upper, steps=self.num_components)
         self.centers = torch.nn.Parameter(centers, requires_grad=False)
@@ -35,6 +34,9 @@ class GaussianMixture(Potential):
         self.gaussian_multiplier = torch.nn.Parameter(0.5 * torch.log(2 * torch.pi * self.variance),
                                                       requires_grad=False)
 
+    def get_parameters(self) -> torch.Tensor:
+        return self.log_weights.data
+
     def get_number_of_mixtures(self) -> int:
         return self.num_gmms
 
@@ -48,7 +50,8 @@ class GaussianMixture(Potential):
         pass
 
     def forward_negative_log(self, x: torch.Tensor) -> torch.Tensor:
-        diff_sq = (self.scale_param.reshape(1, -1, 1, 1, 1) * x.unsqueeze(dim=2) - self.centers.reshape(1, 1, -1, 1, 1)) ** 2
+        diff_sq = (self.scale_param.reshape(1, -1, 1, 1, 1) * x.unsqueeze(dim=2) -
+                   self.centers.reshape(1, 1, -1, 1, 1)) ** 2
         log_weights = torch.nn.functional.log_softmax(self.log_weights, dim=1).reshape(1, self.num_gmms,
                                                                                        self.num_components, 1, 1)
         log_probs = -0.5 * diff_sq / self.variance + log_weights - self.gaussian_multiplier
@@ -61,9 +64,9 @@ class GaussianMixture(Potential):
         return state
 
     def initialisation_dict(self) -> Dict[str, Any]:
-        return {'num_gmms': self.num_gmms, 'num_components': self.num_components,
-                'box_lower': self.box_lower, 'box_upper': self.box_upper}
+        return {'type': self.__class__.__name__, 'num_potentials': self.num_potentials,
+                'num_components': self.num_components, 'box_lower': self.box_lower, 'box_upper': self.box_upper}
 
-    def load_state_dict(self, state_dict: Mapping[str, Any], *args, **kwargs) -> None:
+    def load_state_dict(self, state_dict: Mapping[str, Any], *args, **kwargs) -> NamedTuple:
         result = torch.nn.Module.load_state_dict(self, state_dict, strict=True)
         return result

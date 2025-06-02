@@ -2,7 +2,7 @@ regulariser:
   potential:
     name: 'StudentT'                      # values in ['StudentT', 'GaussianMixture']
     parameters:
-      gmm:                                # NOTE that there is no need for parameter specification for 'StudentT'
+      gaussian_mixture:
         num_components: 125
         box_lower: -1.0
         box_upper: 1.0
@@ -10,7 +10,13 @@ regulariser:
           file: ''                       # if file is specified, 'name' will be ignored
           name: 'uniform'
         trainable: True
-  filters:
+      student_t:
+        initialisation:
+          file: ''                       # if file is specified, 'name' will be ignored
+          name: 'uniform'
+          multiplier: 0.000001           # floating point value the filters initially will be multiplied with
+        trainable: True
+  image_filter:
     padding_mode: 'reflect'
     initialisation:
       file: 'foe_filters_7x7_chen-ranftl-pock_2014.pt'
@@ -22,13 +28,6 @@ regulariser:
       parameters:                 # if file is specified, parameters will be ignored
         filter_dim: 7
         name: 'dct'
-    trainable: True
-  filter_weights:
-    initialisation:
-      file: ''
-      multiplier: 0.000001      # floating point value the filters initially will be multiplied with
-      parameters:               # if file is specified, parameters will be ignored
-        name: 'uniform'         # values in ['uniform', 'rand', 'randn']
     trainable: True
 
 measurement_model:

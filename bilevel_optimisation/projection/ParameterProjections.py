@@ -1,5 +1,10 @@
 import torch
 
+from bilevel_optimisation.data.Constants import EPSILON
+
+def non_negative_projection(x: torch.Tensor) -> torch.Tensor:
+    return torch.clamp(x, min=EPSILON)
+
 def zero_mean_projection(x: torch.Tensor) -> torch.Tensor:
     return x - torch.mean(x, dim=(-2, -1), keepdim=True)
 

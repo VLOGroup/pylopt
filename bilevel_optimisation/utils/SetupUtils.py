@@ -15,15 +15,15 @@ from bilevel_optimisation.data.OptimiserSpec import OptimiserSpec
 from bilevel_optimisation.data.ParamSpec import ParamSpec
 from bilevel_optimisation.data.SolverSpec import SolverSpec
 from bilevel_optimisation.energy.InnerEnergy import InnerEnergy
-from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
 from bilevel_optimisation.factories.BuildFactory import build_solver_factory
 from bilevel_optimisation.factories.BuildFactory import build_optimiser_factory, build_prox_map_factory
+from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
+from bilevel_optimisation.filters.Filters import ImageFilter
 from bilevel_optimisation.optimiser import FixedIterationsStopping
 from bilevel_optimisation.optimiser.ProjectedOptimiser import create_projected_optimiser
 from bilevel_optimisation.optimiser import NAG_TYPE_OPTIMISER
 from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementModel
-from bilevel_optimisation.potential import GaussianMixture, StudentT
-from bilevel_optimisation.projection.ParameterProjections import zero_mean_projection
+from bilevel_optimisation.potential import GaussianMixture, StudentT, Potential
 
 def get_model_data_dir_path(config: Configuration) -> str:
     models_root_dir = config['data']['models']['root_dir'].get()
@@ -32,120 +32,121 @@ def get_model_data_dir_path(config: Configuration) -> str:
         model_data_dir = models_root_dir
     return model_data_dir
 
-def load_filters_spec(config: Configuration) -> ParamSpec:
-    filters = None
+def set_up_image_filter(config: Configuration) -> ImageFilter:
+    trainable = config['regulariser']['image_filter']['trainable'].get()
+    padding_mode = config['regulariser']['image_filter']['padding_mode'].get()
+    filter_file = config['regulariser']['image_filter']['initialisation']['file'].get()
+    filter_multiplier = config['regulariser']['image_filter']['initialisation']['multiplier'].get()
 
-    trainable = config['regulariser']['filters']['trainable'].get()
-    padding_mode = config['regulariser']['filters']['padding_mode'].get()
-    filters_file = config['regulariser']['filters']['initialisation']['file'].get()
-    filters_multiplier = config['regulariser']['filters']['initialisation']['multiplier'].get()
-
-    if filters_file:
+    if filter_file:
         model_data_dir_path = get_model_data_dir_path(config)
-        filters = torch.load(os.path.join(model_data_dir_path, filters_file))
+        filter_data = torch.load(os.path.join(model_data_dir_path, filter_file))
     else:
-        filters_params = config['regulariser']['filters']['initialisation']['parameters'].get()
-        filter_dim = filters_params['filter_dim']
+        filter_dim = config['regulariser']['filters']['initialisation']['parameters']['filter_dim'].get()
+        filter_name = config['regulariser']['filters']['initialisation']['parameters']['filter_name'].get()
 
-        if filters_params['name'] == 'dct':
+        if filter_name == 'dct':
             can_basis = np.reshape(np.eye(filter_dim ** 2, dtype=np.float64), (filter_dim ** 2, filter_dim, filter_dim))
             dct_basis = idct(idct(can_basis, axis=1, norm='ortho'), axis=2, norm='ortho')
             dct_basis = dct_basis[1:].reshape(-1, 1, filter_dim, filter_dim)
-            filters = torch.tensor(dct_basis)
+            filter_data = torch.tensor(dct_basis)
 
-        if filters_params['name'] == 'rand':
-            filters = 2 * torch.rand(filter_dim ** 2 - 1, 1, filter_dim, filter_dim) - 1
+        if filter_name == 'rand':
+            filter_data = 2 * torch.rand(filter_dim ** 2 - 1, 1, filter_dim, filter_dim) - 1
 
-        if filters_params['name'] == 'randn':
-            filters = torch.randn(filter_dim ** 2 - 1, 1, filter_dim, filter_dim)
+        if filter_name == 'randn':
+            filter_data = torch.randn(filter_dim ** 2 - 1, 1, filter_dim, filter_dim)
 
-    filters = filters * filters_multiplier
+    filter_spec = ParamSpec(filter_data * filter_multiplier, trainable=trainable,
+                            parameters={'padding_mode': padding_mode})
+    return ImageFilter(filter_spec)
 
-    return ParamSpec(filters, trainable=trainable, projection=zero_mean_projection,
-                     parameters={'padding_mode': padding_mode})
+def set_up_gaussian_mixture(config: Configuration, num_filters: int) -> GaussianMixture:
+    potential_file = config['regulariser']['potential']['parameters']['gaussian_mixture']['parameters'].get()
+    trainable = (
+        config['regulariser']['parameters']['gaussian_mixture']['initialisation']['parameters']['trainable'].get())
 
-def load_filter_weights_spec(config: Configuration, num_filters: int) -> ParamSpec:
-    filter_weights = None
+    if potential_file:
+        model_data = torch.load(potential_file)
+        initialisation_dict = model_data['initialisation_dict']
+        num_gmms = initialisation_dict['num_potentials'].item()
+        num_components = initialisation_dict['num_components'].item()
 
-    trainable = config['regulariser']['filter_weights']['trainable'].get()
-    filter_weights_file = config['regulariser']['filter_weights']['initialisation']['file'].get()
-    filter_weights_multiplier = config['regulariser']['filter_weights']['initialisation']['multiplier'].get()
-    if filter_weights_file:
-        model_data_dir_path = get_model_data_dir_path(config)
-        filter_weights = torch.load(os.path.join(model_data_dir_path, filter_weights_file))
+        dummy_log_weights = torch.ones(num_gmms, num_components)
+        dummy_log_weights_spec = ParamSpec(dummy_log_weights, trainable=trainable)
+
+        potential = GaussianMixture(num_components=num_components,
+                                    box_lower=initialisation_dict['box_lower'].item(),
+                                    box_upper=initialisation_dict['box_upper'].item(),
+                                    log_weights_spec=dummy_log_weights_spec, num_potentials=num_gmms)
+
+        state_dict = model_data['state_dict']
+        potential.load_state_dict(state_dict)
     else:
-        filter_weights_params = config['regulariser']['filter_weights']['initialisation']['parameters'].get()
+        initialisation_type = (
+            config['regulariser']['potential']['parameters']['gaussian_mixture']['initialisation']['name'].get())
+        num_components = (
+            config['regulariser']['potential']['parameters']['gaussian_mixture']['num_components'].get())
+        box_lower = config['regulariser']['potential']['parameters']['gaussian_mixture']['box_lower'].get()
+        box_upper = config['regulariser']['potential']['parameters']['gaussian_mixture']['box_upper'].get()
 
-        if filter_weights_params['name'] == 'uniform':
-            filter_weights = torch.ones(num_filters)
-
-    filter_weights = filter_weights * filter_weights_multiplier
-
-    return ParamSpec(filter_weights, trainable=trainable, projection=lambda z: torch.clamp(z, min=0.00001))
-
-def load_gmm_log_weights_spec(config: Configuration, num_filters: int) -> ParamSpec:
-    log_weights = None
-    potential_params = config['regulariser']['potential']['parameters']['gmm'].get()
-    num_components = potential_params['num_components']
-    trainable = potential_params['trainable']
-    weights_file = config['regulariser']['potential']['parameters']['gmm']['initialisation']['file'].get()
-    if weights_file:
-        log_weights = torch.load(weights_file)
-    else:
-        log_weights_params = potential_params['initialisation']
-
-        if log_weights_params['name'] == 'uniform':
+        if initialisation_type == 'uniform':
             log_weights = torch.ones(num_filters, num_components)
 
-        if log_weights_params['name'] == 'rand':
+        if initialisation_type == 'rand':
             log_weights = 2 * torch.rand(num_filters, num_components) - 1
 
-    return ParamSpec(log_weights, trainable=trainable)
+        log_weights_spec = ParamSpec(log_weights, trainable=trainable)
+        potential = GaussianMixture(num_components=num_components,
+                                    box_lower=box_lower, box_upper=box_upper,
+                                    log_weights_spec=log_weights_spec, num_potentials=num_filters)
 
-def set_up_regulariser(config: Configuration) -> torch.nn.Module:
-    filters_spec = load_filters_spec(config)
-    num_filters = filters_spec.value.shape[0]
-    filter_weights_spec = load_filter_weights_spec(config, num_filters=num_filters)
+    return potential
 
+def set_up_student_t_potential(config: Configuration, num_filters: int) -> StudentT:
+    potential_file = config['regulariser']['potential']['parameters']['student_t']['initialisation']['file'].get()
+    trainable = (
+        config['regulariser']['potential']['parameters']['student_t']['trainable'].get())
+
+    if potential_file:
+        model_data = torch.load(potential_file)
+
+        initialisation_dict = model_data['initialisation_dict']
+        num_potentials = initialisation_dict['num_potentials'].item()
+
+        dummy_weights = torch.ones(num_potentials)
+        dummy_weights_spec = ParamSpec(dummy_weights, trainable=trainable)
+
+        potential = StudentT(num_potentials=num_potentials, weights_spec=dummy_weights_spec)
+        state_dict = model_data['state_dict']
+        potential.load_state_dict(state_dict)
+    else:
+        weight_multiplier = (
+            config['regulariser']['potential']['parameters']['student_t']['initialisation']['multiplier'].get())
+
+        if config['regulariser']['potential']['parameters']['student_t']['initialisation']['name'].get() == 'uniform':
+            weights = weight_multiplier * torch.ones(num_filters)
+
+        weights_spec = ParamSpec(weights, trainable=trainable)
+        potential = StudentT(num_potentials=num_filters, weights_spec=weights_spec)
+
+    return potential
+
+def set_up_potential(config: Configuration, num_filters: int) -> Potential:
     potential_name = config['regulariser']['potential']['name'].get()
     if potential_name == 'GaussianMixture':
-        gmm_params = config['regulariser']['potential']['parameters']['gmm'].get()
-        potential_file = config['regulariser']['potential']['parameters']['gmm']['initialisation']['file'].get()
-        trainable = gmm_params['trainable']
+        potential = set_up_gaussian_mixture(config, num_filters)
 
-        if potential_file:
-            # dummy initialisation
-            model_data_file = potential_file
-            model_data = torch.load(model_data_file)
-            initialisation_dict = model_data['initialisation_dict']
-            num_gmms = initialisation_dict['num_gmms'].item()
-            num_components = initialisation_dict['num_components'].item()
-            dummy_log_weights = 2 * torch.ones(num_filters, num_components) - 1
-            dummy_log_weights_spec = ParamSpec(dummy_log_weights, trainable=trainable)
+    if potential_name == 'StudentT':
+        potential = set_up_student_t_potential(config, num_filters)
 
-            potential_ = GaussianMixture(num_components=num_components,
-                                        box_lower=initialisation_dict['box_lower'].item(),
-                                        box_upper=initialisation_dict['box_upper'].item(),
-                                        log_weights_spec=dummy_log_weights_spec,
-                                        num_gmms=num_gmms)
+    return potential
 
-            # load state dict
-            state_dict = model_data['state_dict']
-            potential_.load_state_dict(state_dict)
-        else:
-            num_components = gmm_params['num_components']
-            box_lower = gmm_params['box_lower']
-            box_upper = gmm_params['box_upper']
-
-            log_weights_spec = load_gmm_log_weights_spec(config, num_filters)
-            potential_ = GaussianMixture(num_components=num_components, box_lower=box_lower, box_upper=box_upper,
-                                         log_weights_spec=log_weights_spec, num_gmms=num_filters)
-    elif potential_name == 'StudentT':
-        potential_ = StudentT()
-    else:
-        raise ValueError('There is no potential titled {:s}'.format(potential_name))
-
-    return FieldsOfExperts(potential_, filters_spec, filter_weights_spec)
+def set_up_regulariser(config: Configuration) -> torch.nn.Module:
+    image_filter = set_up_image_filter(config)
+    num_filters = image_filter.get_num_filters()
+    potential = set_up_potential(config, num_filters)
+    return FieldsOfExperts(potential, image_filter)
 
 def load_optimiser_class(optimiser_name: str, projected: bool=False) -> type[torch.optim.Optimizer]:
     # TODO

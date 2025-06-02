@@ -4,10 +4,10 @@ from pathlib import Path
 import torch
 
 from bilevel_optimisation.data.ParamSpec import ParamSpec
+from bilevel_optimisation.potential.StudentT import StudentT
 from bilevel_optimisation.potential.GaussianMixture import GaussianMixture
 from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
 from bilevel_optimisation.projection.ParameterProjections import zero_mean_projection
-
 
 def dump_config_file(config: Configuration, path_to_data_dir: str):
     config_data = config.dump(full=True)
@@ -51,36 +51,42 @@ def save_foe_model(model: FieldsOfExperts, path_to_data_dir: str, model_dir_name
         os.makedirs(path_to_model_dir, exist_ok=True)
 
     filters_file_name = 'filters.pt'
-    filter_weights_file_name = 'filter_weights.pt'
     potential_file_name = 'potential.pt'
 
-    torch.save(model.get_filters(), os.path.join(path_to_model_dir, filters_file_name))
-    torch.save(model.get_filter_weights(), os.path.join(path_to_model_dir, filter_weights_file_name))
-    potential = model.get_potential()
+    image_filter = model.get_image_filter()
+    dct_image_filter = {'initialisation_dict': image_filter.initialisation_dict(),
+                        'state_dict': image_filter.state_dict()}
+    torch.save(dct_image_filter, os.path.join(path_to_model_dir, filters_file_name))
 
-    dct = {'initialisation_dict': potential.initialisation_dict(),
-           'state_dict': potential.state_dict()}
-    torch.save(dct, os.path.join(path_to_model_dir, potential_file_name))
+    potential = model.get_potential()
+    dct_potential = {'initialisation_dict': potential.initialisation_dict(),
+                     'state_dict': potential.state_dict()}
+    torch.save(dct_potential, os.path.join(path_to_model_dir, potential_file_name))
 
 def load_foe_model(path_to_data_dir: str, model_dir_name: str='models') -> FieldsOfExperts:
     filters = torch.load(os.path.join(path_to_data_dir, model_dir_name, 'filters.pt'))
     filters_spec = ParamSpec(value=filters, trainable=True,
                              projection=zero_mean_projection, parameters={'padding_mode': 'reflect'})
 
-    filter_weights = torch.load(os.path.join(path_to_data_dir, model_dir_name, 'filter_weights.pt'))
-    filter_weights_spec = ParamSpec(value=filter_weights, trainable=True)
-
     checkpoint = torch.load(os.path.join(path_to_data_dir, model_dir_name, 'potential.pt'))
     initialisation_dict = checkpoint['initialisation_dict']
     state_dict = checkpoint['state_dict']
 
-    num_gmms = initialisation_dict['num_gmms'].item()
-    num_components = initialisation_dict['num_components'].item()
-    potential = GaussianMixture(num_components=num_components,
+    potential_type = initialisation_dict['type'].item()
+    num_potentials = initialisation_dict['num_potentials'].item()
+    potential = None
+    if potential_type == 'StudentT':
+        potential = StudentT(num_potentials=num_potentials,
+                             weights_spec=ParamSpec(value=torch.rand(num_potentials), trainable=True))
+
+    if potential_type == 'GaussianMixture':
+        num_components = initialisation_dict['num_components'].item()
+        potential = GaussianMixture(num_components=num_components,
                                 box_lower=initialisation_dict['box_lower'].item(),
                                 box_upper=initialisation_dict['box_upper'].item(),
-                                log_weights_spec=ParamSpec(value=torch.rand(num_gmms, num_components), trainable=True),
-                                num_gmms=num_gmms)
-    potential.load_state_dict(state_dict)
+                                log_weights_spec=ParamSpec(value=torch.rand(num_potentials, num_components),
+                                                           trainable=True),
+                                num_potentials=num_potentials)
 
-    return FieldsOfExperts(potential, filters_spec, filter_weights_spec)
+    potential.load_state_dict(state_dict)
+    return FieldsOfExperts(potential, filters_spec)

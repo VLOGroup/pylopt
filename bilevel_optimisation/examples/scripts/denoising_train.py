@@ -27,7 +27,7 @@ def visualise_intermediate_results(regulariser: torch.nn.Module, device: torch.d
     filter_images_dir_path = os.path.join(path_to_data_dir, filter_image_subdir)
     if not os.path.exists(filter_images_dir_path):
         os.makedirs(filter_images_dir_path, exist_ok=True)
-    visualise_filters(regulariser.get_filters(), regulariser.get_filter_weights(),
+    visualise_filters(regulariser.get_filters(), regulariser.get_potential().get_parameters(),
                       fig_dir_path=filter_images_dir_path, file_name='filters_iter_{:d}.png'.format(curr_iter + 1))
 
     # visualise potential functions (per filter)
@@ -57,7 +57,7 @@ def train_bilevel(config: Configuration):
                              collate_fn=lambda x: collate_function(x, crop_size=-1))
 
     regulariser = set_up_regulariser(config)
-    regulariser = regulariser.to(device=device, dtype=torch.float64)
+    regulariser = regulariser.to(device=device, dtype=dtype)
     bilevel = set_up_bilevel_problem(regulariser.parameters(), config)
     bilevel = bilevel.to(device=device, dtype=torch.float64)
 
@@ -73,12 +73,12 @@ def train_bilevel(config: Configuration):
     psnr_list = [psnr]
 
     filters_list = []
-    filter_weights_list = []
+    potential_param_list = []
 
     writer = SummaryWriter(log_dir=os.path.join(path_to_eval_dir, 'tensorboard'))
 
     evaluation_freq = 2
-    max_num_iterations = 200
+    max_num_iterations = 10
     try:
         for k, batch in enumerate(train_loader):
 
@@ -92,8 +92,8 @@ def train_bilevel(config: Configuration):
                 train_loss = bilevel.forward(outer_loss, inner_energy)
 
                 train_loss_list.append(train_loss.detach().cpu().item())
-                filters_list.append(regulariser.get_filters())
-                filter_weights_list.append(regulariser.get_filter_weights())
+                filters_list.append(regulariser.get_image_filter().get_filter_tensor())
+                potential_param_list.append(regulariser.get_potential().get_parameters())
                 logging.info('[TRAIN] iteration [{:d} / {:d}]: '
                              'loss = {:.5f}'.format(k + 1, max_num_iterations, train_loss.detach().cpu().item()))
 
@@ -126,7 +126,7 @@ def train_bilevel(config: Configuration):
         save_foe_model(regulariser, os.path.join(path_to_eval_dir, 'models'), model_dir_name='final')
 
         visualise_training_stats(train_loss_list, test_loss_list, psnr_list, evaluation_freq, path_to_eval_dir)
-        visualise_filter_stats(filters_list, filter_weights_list, path_to_eval_dir)
+        visualise_filter_stats(filters_list, potential_param_list, path_to_eval_dir)
 
 def main():
     seed_random_number_generators(123)
