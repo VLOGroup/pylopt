@@ -8,6 +8,12 @@
 - Use filter_weights as parameters of the StudentT potential only
 - Improve handling of proximal maps
 
+## [1.1.1]
+
+### Fixes
+
+- Enable loading of pre-trained filters, filter weights, etc. also for CPU.
+
 ## [1.1.0]
 
 ### Features
