@@ -1,6 +1,6 @@
 import torch
 
-class Timer:
+class CUDATimer:
     def __init__(self):
         pass
 

@@ -38,7 +38,6 @@ class MeasurementModel(torch.nn.Module):
 
         :return: torch.nn.Parameter
         """
-        logging.debug('[MEASUREMENT-MODEL] make noisy observation')
         obs_clean = self._operator(self.u_clean)
         return torch.nn.Parameter(obs_clean + self._noise_level * torch.randn_like(obs_clean), requires_grad=False)
 

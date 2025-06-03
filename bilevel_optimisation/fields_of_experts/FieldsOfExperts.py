@@ -1,9 +1,7 @@
-import logging
 import torch
 
 from bilevel_optimisation.filters.Filters import ImageFilter
 from bilevel_optimisation.potential.Potential import Potential
-from bilevel_optimisation.utils.TimerUtils import Timer
 
 class FieldsOfExperts(torch.nn.Module):
     """
@@ -40,7 +38,6 @@ class FieldsOfExperts(torch.nn.Module):
         return torch.einsum('bfhw->', neg_log_potential)
 
     def forward_(self, x: torch.Tensor) -> torch.Tensor:
-        logging.debug('[FoE] evaluate regulariser')
         x_conv = self.image_filter(x)
         return torch.einsum('bfhw->', self.potential.forward_negative_log(x_conv))
 

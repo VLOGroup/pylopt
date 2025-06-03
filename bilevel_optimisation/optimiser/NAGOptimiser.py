@@ -114,7 +114,6 @@ class NAGOptimiser(BaseNAGOptimiser):
             step sizes
         :return: Altered parameter list
         """
-        logging.debug('[NAG] line search: use constant step size')
         # NOTE
         #   > this call is required to accumulate gradients
         _ = closure()
@@ -156,8 +155,6 @@ class NAGOptimiser(BaseNAGOptimiser):
             in backtracking loop
         :return: Altered list of parameters
         """
-        logging.debug('[NAG] line search: backtracking')
-
         loss = closure()
         params_orig = [p.data.clone() for p in params]
         grads_orig = [p.grad.clone() for p in params]
@@ -191,7 +188,6 @@ class NAGOptimiser(BaseNAGOptimiser):
         :param closure: Loss function which is required for this optimisation procedure.
         :return: Loss after update step is performed
         """
-        logging.debug('[NAG] perform update')
         if not self._beta:
             theta_new = 0.5 * (1 + np.sqrt(1 + 4 * (self._theta ** 2)))
             beta = (self._theta - 1) / theta_new
@@ -201,7 +197,6 @@ class NAGOptimiser(BaseNAGOptimiser):
 
         for group in self.param_groups:
             trainable_params = [p for p in group['params'] if p.requires_grad]
-            logging.debug('[NAG] collect momenta')
             for p in trainable_params:
                 state = self.state[p]
 

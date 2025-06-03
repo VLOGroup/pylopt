@@ -4,9 +4,9 @@ regulariser:
     parameters:
       student_t:
         initialisation:
-          multiplier: 0.001
-          parameters:
-            name: 'uniform'
+          file: ''                       # if file is specified, 'name' will be ignored
+          name: 'uniform'
+          multiplier: 0.001           # floating point value the filters initially will be multiplied with
         trainable: True
   image_filter:
     trainable: False

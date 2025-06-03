@@ -78,7 +78,7 @@ def train_bilevel(config: Configuration):
     writer = SummaryWriter(log_dir=os.path.join(path_to_eval_dir, 'tensorboard'))
 
     evaluation_freq = 2
-    max_num_iterations = 10
+    max_num_iterations = 2
     try:
         for k, batch in enumerate(train_loader):
 

@@ -1,16 +1,16 @@
 regulariser:
   potential:
     name: 'StudentT'
-  filters:
-    padding_mode: 'reflect'
+    parameters:
+      student_t:
+        initialisation:
+          file: 'foe_filter-weights_7x7_thaler_2025.pt'
+          multiplier: 1.0
+        trainable: False
+  image_filter:
     initialisation:
       file: 'foe_filters_7x7_chen-ranftl-pock_2014.pt'
       multiplier: 255.0
-    trainable: False
-  filter_weights:
-    initialisation:
-      file: 'foe_filter-weights_7x7_thaler_2025.pt'
-      multiplier: 1.0
     trainable: False
 
 measurement_model:
@@ -29,7 +29,7 @@ inner_energy:
         max_num_iterations: 1000
         rel_tol: 0.00001
 data:
-  type: 'float64'
+  type: 'float32'
   dataset:
     train:
       root_dir: '/home/florianthaler/Documents/data/image_data/BSDS300/images/train'

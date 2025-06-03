@@ -31,8 +31,6 @@ class AlternatingNAGOptimiser(BaseNAGOptimiser):
         self.param_lip_const_dict = {}          # keep track of lipschitz constants per parameter (relevant for backtracking only)
 
     def _line_search_backtracking(self, p: torch.nn.Parameter, closure: Callable) -> torch.nn.Parameter:
-        logging.debug('[NAG] line search: backtracking')
-
         loss = closure()
         grad = p.grad.clone()
         state = self.state[p]
@@ -64,7 +62,6 @@ class AlternatingNAGOptimiser(BaseNAGOptimiser):
         return p
 
     def _line_search_constant(self, p: torch.nn.Parameter, closure: Callable) -> torch.nn.Parameter:
-        logging.debug('[NAG] line search: use constant step size')
         _ = closure()
         grad = p.grad.clone()
         if hasattr(p, 'alpha'):
@@ -93,12 +90,8 @@ class AlternatingNAGOptimiser(BaseNAGOptimiser):
 
     @torch.no_grad()
     def step(self, closure: Callable) -> float:
-        logging.debug('[NAG] perform update')
         for group in self.param_groups:
             for p in group['params']:
-                if hasattr(p, 'param_name'):
-                    logging.debug('[NAG] perform update for parameter {:s}'.format(p.param_name))
-
                 if not p.requires_grad:
                     continue
 

@@ -109,7 +109,8 @@ def set_up_student_t_potential(config: Configuration, num_filters: int) -> Stude
         config['regulariser']['potential']['parameters']['student_t']['trainable'].get())
 
     if potential_file:
-        model_data = torch.load(potential_file)
+        model_data_dir_path = get_model_data_dir_path(config)
+        model_data = torch.load(os.path.join(model_data_dir_path, potential_file))
 
         initialisation_dict = model_data['initialisation_dict']
         num_potentials = initialisation_dict['num_potentials'].item()

@@ -30,7 +30,6 @@ class CGSolver(LinearSystemSolver):
 
     @torch.no_grad()
     def solve(self, linear_operator: Callable, b: torch.Tensor, x0: torch.Tensor = None) -> SolverResult:
-        logging.debug('[CG] solve linear system with cg')
         max_num_iterations = self._max_num_iterations if self._max_num_iterations is not None else b.numel()
         x = torch.zeros_like(b) if x0 is None else x0
         solution = None
@@ -55,12 +54,7 @@ class CGSolver(LinearSystemSolver):
             iterate_list.append(x_new)
             stop, info = self._stopping_criteria_met(r_new, k, max_num_iterations)
 
-            if (k + 1) % 10 == 0:
-                logging.debug('[CG] iteration [{:d}/{:d}]: res = {:.5f}'.format(k + 1,
-                                                                                self._max_num_iterations, curr_res))
-
             if stop:
-                logging.debug('[CG] stopping criteria met: stop iteration')
                 solution = x_new.clone()
                 solution = solution.detach()
                 break

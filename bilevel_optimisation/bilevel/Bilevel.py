@@ -163,10 +163,10 @@ class BilevelDifferentiation(Function):
 
         lin_operator = lambda z: inner_energy.hvp_state(x_denoised, z)
         lagrange_multiplier_result = solver.solve(lin_operator, -grad_outer_loss)
-        logging.debug('[BILEVEL] linear system solver stats')
-        logging.debug('[BILEVEL] > num_iterations: {:d}'.format(lagrange_multiplier_result.stats.num_iterations))
-        final_residual = lagrange_multiplier_result.stats.residual_norm_list[-1]
-        logging.debug('[BILEVEL] > norm of final residual: {:.9f}'.format(final_residual))
+        # logging.debug('[BILEVEL] linear system solver stats')
+        # logging.debug('[BILEVEL] > num_iterations: {:d}'.format(lagrange_multiplier_result.stats.num_iterations))
+        # final_residual = lagrange_multiplier_result.stats.residual_norm_list[-1]
+        # logging.debug('[BILEVEL] > norm of final residual: {:.9f}'.format(final_residual))
 
         return lagrange_multiplier_result.solution
 
@@ -186,7 +186,6 @@ class BilevelDifferentiation(Function):
             forward function there must be a return parameter. This is why for this implementation 5
             return values need to be specified. For more details see again [1].
         """
-        logging.debug('[BILEVEL] compute gradients (implicit differentiation)')
         x_denoised = ctx.saved_tensors[0]
         inner_energy = ctx.inner_energy
         outer_loss_func = ctx.loss_func
