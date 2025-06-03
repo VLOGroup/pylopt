@@ -57,9 +57,9 @@ def train_bilevel(config: Configuration):
                              collate_fn=lambda x: collate_function(x, crop_size=-1))
 
     regulariser = set_up_regulariser(config, device)
-    regulariser = regulariser.to(device=device, dtype=torch.float64)
+    regulariser = regulariser.to(device=device, dtype=dtype)
     bilevel = set_up_bilevel_problem(regulariser.parameters(), config)
-    bilevel = bilevel.to(device=device, dtype=torch.float64)
+    bilevel = bilevel.to(device=device, dtype=dtype)
 
     log_trainable_params_stats(regulariser, logging_module='train')
     path_to_eval_dir = create_evaluation_dir(config)

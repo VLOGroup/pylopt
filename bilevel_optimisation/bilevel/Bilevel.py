@@ -78,11 +78,6 @@ class Bilevel(torch.nn.Module):
 
             logging.info('[BILEVEL] performed update step')
             logging.info('[BILEVEL]  > elapsed time [s]: {:.5f}'.format(t1 - t0))
-            if hasattr(self._optimiser, 'param_lip_const_dict'):
-                logging.info('[BILEVEL]  > lipschitz constants:')
-                for key in self._optimiser.param_lip_const_dict.keys():
-                    logging.info('[INNER]      * {:s}: {:.3f}'.format(key,
-                                                                       self._optimiser.param_lip_const_dict[key]))
         return curr_loss
 
 class BilevelUnrolling(Function):

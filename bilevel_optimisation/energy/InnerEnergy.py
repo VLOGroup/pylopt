@@ -78,7 +78,7 @@ class InnerEnergy(torch.nn.Module, ABC):
             x_.requires_grad = True
 
             e = self.forward(x_)
-            de_dx = torch.autograd.grad(inputs=x_, outputs=e, create_graph=True, retain_graph=True)
+            de_dx = torch.autograd.grad(inputs=x_, outputs=e, create_graph=True)
         return torch.autograd.grad(inputs=x_, outputs=de_dx[0], grad_outputs=v)[0]
 
     def hvp_mixed(self, x: torch.Tensor, v: torch.Tensor) -> List[Optional[torch.Tensor]]:
@@ -101,7 +101,7 @@ class InnerEnergy(torch.nn.Module, ABC):
             x_.requires_grad = True
 
             e = self.forward(x_)
-            de_dx = torch.autograd.grad(inputs=x_, outputs=e, create_graph=True, retain_graph=True)
+            de_dx = torch.autograd.grad(inputs=x_, outputs=e, create_graph=True)
         d2e_mixed = torch.autograd.grad(inputs=[p for p in self.parameters() if p.requires_grad],
                                         outputs=de_dx, grad_outputs=v)
         return list(d2e_mixed)
@@ -185,17 +185,7 @@ class OptimisationEnergy(InnerEnergy):
             x_old = x_.detach().clone()
 
             closure = closure_factory(x_)
-            curr_loss = optimiser.step(closure)
-
-            if (k + 1) % 10 == 0:
-                logging.debug('[INNER] finished iteration [{:d}/{:d}]'.format(k + 1,
-                                                                              stopping.get_max_num_iterations()))
-                logging.debug('[INNER]  > loss = {:.5f}'.format(curr_loss.detach().cpu().item()))
-                if hasattr(optimiser, 'param_lip_const_dict'):
-                    logging.debug('[INNER]  > lipschitz constants:')
-                    for key in optimiser.param_lip_const_dict:
-                        logging.debug('[INNER]      * {:s}: {:.3f}'.format(key,
-                                                                           optimiser.param_lip_const_dict[key]))
+            _ = optimiser.step(closure)
 
             stop = stopping.stop_iteration(k + 1, x_old=x_old, x_curr=x_)
             if not stop:
