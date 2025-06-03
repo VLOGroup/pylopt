@@ -1,4 +1,3 @@
-import numpy as np
 import torch
 from abc import ABC, abstractmethod
 from typing import Callable, Optional, List, Any
@@ -80,7 +79,7 @@ class InnerEnergy(torch.nn.Module, ABC):
             x_.requires_grad = True
 
             e = self.forward(x_)
-            de_dx = torch.autograd.grad(inputs=x_, outputs=e, create_graph=True, retain_graph=True)
+            de_dx = torch.autograd.grad(inputs=x_, outputs=e, create_graph=True)
         return torch.autograd.grad(inputs=x_, outputs=de_dx[0], grad_outputs=v)[0]
 
     def hvp_mixed(self, x: torch.Tensor, v: torch.Tensor) -> List[Optional[torch.Tensor]]:
@@ -172,61 +171,30 @@ class OptimisationEnergy(InnerEnergy):
         """
         logging.info('[INNER] perform argmin to compute MAP estimate')
 
-        with CUDATimer() as timer_argmin:
+        x_ = x.detach().clone()
+        x_.requires_grad = True
+        optimiser, stopping, prox_map_factory = self._optimiser_factory([x_])
+        if prox_map_factory is not None:
+            setattr(x_, 'prox', prox_map_factory(x))
+        closure_factory = self._build_closure_factory(optimiser)
 
-            x_ = x.detach().clone()
-            x_.requires_grad = True
-            optimiser, stopping, prox_map_factory = self._optimiser_factory([x_])
-            if prox_map_factory is not None:
-                setattr(x_, 'prox', prox_map_factory(x))
-            closure_factory = self._build_closure_factory(optimiser)
+        k = 0
+        stop = False
+        t0 = time.time()
+        while not stop:
+            x_old = x_.detach().clone()
 
-            closure_times_list = []
-            step_times_list = []
-            iteration_times_list = []
+            closure = closure_factory(x_)
+            _ = optimiser.step(closure)
 
-            k = 0
-            stop = False
-            while not stop:
-                with CUDATimer() as timer_iteration:
-                    x_old = x_.detach().clone()
+            stop = stopping.stop_iteration(k + 1, x_old=x_old, x_curr=x_)
+            if not stop:
+                k += 1
+        t1 = time.time()
 
-                    with CUDATimer() as timer_closure:
-                        closure = closure_factory(x_)
-
-                    closure_times_list.append(timer_closure.delta_time)
-
-
-                    with CUDATimer() as timer_step:
-                        curr_loss = optimiser.step(closure)
-                    step_times_list.append(timer_step.delta_time)
-
-                        # if (k + 1) % 10 == 0:
-                        #     logging.debug('[INNER] finished iteration [{:d}/{:d}]'.format(k + 1,
-                        #                                                                   stopping.get_max_num_iterations()))
-                        #     logging.debug('[INNER]  > loss = {:.5f}'.format(curr_loss.detach().cpu().item()))
-                        #     if hasattr(optimiser, 'param_lip_const_dict'):
-                        #         logging.debug('[INNER]  > lipschitz constants:')
-                        #         for key in optimiser.param_lip_const_dict:
-                        #             logging.debug('[INNER]      * {:s}: {:.3f}'.format(key,
-                        #                                                                optimiser.param_lip_const_dict[key]))
-
-                    stop = stopping.stop_iteration(k + 1, x_old=x_old, x_curr=x_)
-                    if not stop:
-                        k += 1
-
-                iteration_times_list.append(timer_iteration.delta_time)
-
-            # logging.info('[INNER] computed MAP estimate')
-            # logging.info('[INNER]  > number of iterations: {:d}'.format(k + 1))
-            # logging.info('[INNER]  > elapsed time [s]: {:.5f}'.format(t1 - t0))
-
-        print('finished argmin:')
-        print(' > num iterations: {:d}'.format(k + 1))
-        print(' > total elapsed argmin time [ms]: {:.5f}'.format(timer_argmin.delta_time))
-        print('     * mean elapsed iteration time [ms]: {:.5f}'.format(np.mean(iteration_times_list)))
-        print('     * mean elapsed closure time [ms]: {:.5f}'.format(np.mean(closure_times_list)))
-        print('     * mean elapsed step time: [ms]: {:.5f}'.format(np.mean(step_times_list)))
+        logging.info('[INNER] computed MAP estimate')
+        logging.info('[INNER]  > number of iterations: {:d}'.format(k + 1))
+        logging.info('[INNER]  > elapsed time [s]: {:.5f}'.format(t1 - t0))
 
         return x_
 

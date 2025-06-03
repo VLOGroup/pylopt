@@ -8,6 +8,25 @@
 - Use filter_weights as parameters of the StudentT potential only
 - Improve handling of proximal maps
 
+## [1.1.3]
+
+### Feature
+
+- Speed improvements by using torch.float32; additionally remove several debug log messages
+and retain computational graph only if really necessary.
+
+## [1.1.2]
+
+### Fixes
+
+- In denoising notebook use custom config which is already checked in the repository.
+
+## [1.1.1]
+
+### Fixes
+
+- Enable loading of pre-trained filters, filter weights, etc. also for CPU.
+
 ## [1.1.0]
 
 ### Features

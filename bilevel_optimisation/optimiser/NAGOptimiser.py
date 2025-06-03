@@ -207,7 +207,6 @@ class NAGOptimiser(BaseNAGOptimiser):
                 state['history'] = p.data.clone()
                 p.data.add_(beta * momentum)
 
-            # perform line search
             if self._alpha:
                 trainable_params = self._line_search_constant(trainable_params, closure)
             else:

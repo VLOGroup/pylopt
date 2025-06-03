@@ -26,7 +26,7 @@ bilevel:
     parameters: {beta: 0.71, lip_const_default: 100000}
 
 data:
-  type: 'float64'
+  type: 'float32'
   dataset:
     train:
       root_dir: '/home/florianthaler/Documents/data/image_data/BSDS300/images/train'
