@@ -4,10 +4,8 @@ from typing import Callable, Optional, List, Any
 import logging
 import time
 
-
 from bilevel_optimisation.measurement_model import MeasurementModel
 from bilevel_optimisation.optimiser import NAG_TYPE_OPTIMISER
-from bilevel_optimisation.utils.TimerUtils import CUDATimer
 
 class InnerEnergy(torch.nn.Module, ABC):
     """

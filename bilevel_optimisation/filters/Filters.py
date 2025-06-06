@@ -11,7 +11,7 @@ class ImageFilter(torch.nn.Module):
         self.filter_tensor = torch.nn.Parameter(data=filter_spec.value, requires_grad=filter_spec.trainable)
         setattr(self.filter_tensor, 'proj', zero_mean_projection)
 
-        self.filter_dim = self.filter_tensor.shape[0]             # filters are assumed to be quadratic!
+        self.filter_dim = self.filter_tensor.shape[-1]             # filters are assumed to be quadratic!
         self.padding_mode = filter_spec.parameters['padding_mode']
         if 'padding' in filter_spec.parameters.keys():
             self.padding = filter_spec.parameters['padding']
@@ -25,7 +25,7 @@ class ImageFilter(torch.nn.Module):
         return self.filter_tensor.shape[0]
 
     def forward(self, x: torch.Tensor):
-        x_padded = torch.nn.functional.pad(x, (self.padding, ) * 4, 'reflect')
+        x_padded = torch.nn.functional.pad(x, (self.padding, ) * 4, self.padding_mode)
         return torch.nn.functional.conv2d(x_padded, self.filter_tensor)
 
     def state_dict(self, *args, **kwargs) -> Dict[str, Any]:
@@ -33,12 +33,8 @@ class ImageFilter(torch.nn.Module):
         return state
 
     def initialisation_dict(self)  -> Dict[str, Any]:
-        return {'padding': self.padding, 'padding_mode': self.padding_mode}
+        return {'filter_dim': self.filter_dim, 'padding_mode': self.padding_mode}
 
     def load_state_dict(self, state_dict: Mapping[str, Any], *args, **kwargs) -> NamedTuple:
         result = torch.nn.Module.load_state_dict(self, state_dict, strict=True)
         return result
-
-
-
-

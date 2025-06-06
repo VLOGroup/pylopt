@@ -1,17 +1,17 @@
 regulariser:
   potential:
     name: 'StudentT'
-  filters:
+    parameters:
+      student_t:
+        initialisation:
+          name: 'uniform'
+          multiplier: 0.000001
+        trainable: True
+  image_filter:
     padding_mode: 'reflect'
     initialisation:
-      file: 'foe_filters_7x7_chen-ranftl-pock_2014.pt'
-      multiplier: 255.0
-    trainable: True
-  filter_weights:
-    initialisation:
-      multiplier: 0.000001
-      parameters:
-        name: 'uniform'
+      file: 'foe_filters_7x7_chen-ranftl-pock_2014_scaled.pt'
+      multiplier: 1.0
     trainable: True
 
 inner_energy:
@@ -19,17 +19,18 @@ inner_energy:
   lam: 0.1
   optimiser:
     name: 'NAGOptimiser'
+    use_prox: True
     stopping:
       name: 'FixedIterationsStopping'
 
 bilevel:
   loss: 'L2Loss'
   optimiser:
-    name: 'NAGOptimiser'
+    name: 'AlternatingNAGOptimiser'
     parameters: {beta: 0.71, lip_const_default: 10000000}
 
 data:
-  type: 'float32'         # values in ['float32', 'float64']
+  type: 'float32'
   dataset:
     train:
       root_dir: '/home/florianthaler/Documents/data/image_data/BSDS300/images/train'

@@ -99,7 +99,9 @@ while not training_finished:
 
 ### Concrete
 
-Concrete and executable code for training and prediction is contained in `stochastic_bilevel_optimisation/scripts`.
+Concrete and executable code for training and prediction is contained in `bilevel_optimisation/examples`. Please note
+that reproducibility of training results can be obtained only when using the datatype `torch.float64`. However, 
+this comes at the cost of increased computation time. 
 
 #### Denoising using pretrained models
 
@@ -108,12 +110,18 @@ Concrete and executable code for training and prediction is contained in `stocha
   - Filters: Pretrained filters from [[1]](#1) 
   - Filter weights: Optimised using `StochasticBilevelOptimisation`.
 
-  To run the script, first update the dataset configurations in `data/configs/example_prediction_I`, 
+  To run the script, first update the dataset configurations in `config_data/example_prediction_I`, 
   then execute 
 
     ```
-    python examples/denoising_predict --configs example_prediction_I 
+    python examples/scripts/denoising_predict.py --configs example_prediction_I 
     ```
+  
+  Alternatively, run the Jupyter notebook `example_denoising_predict.ipynb`.
+
+  |                    Test triplet                     |                     Filter response                     |
+  |:---------------------------------------------------:|:-------------------------------------------------------:|
+  | ![](./images/results/prediction_I_test_triplet.jpg) | ![](./images/results/prediction_I_filter_responses.png) |
 
 - **Example II** ...
   
@@ -134,12 +142,12 @@ Concrete and executable code for training and prediction is contained in `stocha
   To run the training script, execute   
 
     ```
-    python examples/denoising_train --configs example_training_I 
+    python examples/scripts/denoising_train.py --configs example_training_I 
     ```
 
-  |                   Training stats                    |                   Test triplet                    |
-  |:---------------------------------------------------:|:-------------------------------------------------:|
-  | ![](./images/results/training_stats_training_I.png) | ![](./images/results/test_triplet_training_I.png) |
+  |                    Training stats                    |                Potential weight stats                |                    Test triplet                    |
+  |:----------------------------------------------------:|:----------------------------------------------------:|:--------------------------------------------------:|
+  | ![](./images/results/training_I_training_stats.png) | ![](./images/results/training_I_student_t_stats.png) | ![](./images/results/training_I_test_triplets.jpg) |
 
   Note that already after very iterations, we obtain a notable denoising performance. The main 
   reason for this behaviour is the nearly optimal initialisation of the filters. 
@@ -159,13 +167,15 @@ Concrete and executable code for training and prediction is contained in `stocha
   To run the corresponding training script, execute  
 
   ```
-  python examples/scripts/denoising_train --configs example_training_II
+  python examples/scripts/denoising_train.py --configs example_training_II
   ```
 
   The training results are consistent with the results obtained in Example I. Notably, although the filters 
   are trainable, their $l^{2}$-norm remains nearly constant throughout the training process:
 
-  ![](./images/results/filter_stats_training_II.png)
+  |                    Training stats                    |                    Filter stats                    |               Student-t potential                |
+  |:----------------------------------------------------:|:--------------------------------------------------:|:------------------------------------------------:|
+  | ![](./images/results/training_II_training_stats.png) | ![](./images/results/training_II_filter_stats.png) | ![](./images/results/training_II_potentials.png) |
 
 - **Example III**
   - Potential: Student-t
@@ -181,14 +191,15 @@ Concrete and executable code for training and prediction is contained in `stocha
 
   To train filters and filter weights with these specifications, call
   ```
-  python examples/scripts/denoising_train --configs example_training_III
+  python examples/scripts/denoising_train.py --configs example_training_III
   ```
 
   We obtain similar denoising results as before:
 
-  |                    Training stats                     |                    Filter stats                     |                    Test triplet                     |
-  |:-----------------------------------------------------:|:---------------------------------------------------:|:---------------------------------------------------:|
-  | ![](./images/results/training_stats_training_III.png) | ![](./images/results/filter_stats_training_III.png) | ![](./images/results/test_triplet_training_III.png) |
+  
+  |                    Training stats                     |                    Filter stats                     |                 Potential weight stats                 |                Student-t potential                |
+  |:-----------------------------------------------------:|:---------------------------------------------------:|:------------------------------------------------------:|:-------------------------------------------------:|
+  | ![](./images/results/training_III_training_stats.png) | ![](./images/results/training_III_filter_stats.png) | ![](./images/results/training_III_student_t_stats.png) | ![](./images/results/training_III_potentials.png) |
 
 - **Example IV** 
   - Potential: Student-t
@@ -202,6 +213,8 @@ Concrete and executable code for training and prediction is contained in `stocha
     - Inner: NAGOptimiser
     - Outer: Adam
 
+  Results: ...
+
 - **Example V**
   - Potential: Gaussian mixture
   - Filters:
@@ -213,6 +226,8 @@ Concrete and executable code for training and prediction is contained in `stocha
  - Optimiser:
     - Inner: NAGOptimiser
     - Outer: Adam
+
+  Results: ...
 
 ## Contributing
 

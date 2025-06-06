@@ -1,25 +1,21 @@
 regulariser:
   potential:
     name: 'StudentT'
-  filters:
+    parameters:
+      student_t:
+        initialisation:
+          name: 'uniform'
+          multiplier: 0.01
+        trainable: True
+  image_filter:
     padding_mode: 'reflect'
     initialisation:
       file: ''
-      multiplier: 50
+      multiplier: 50.0
       parameters:
-        filter_dim: 7
         name: 'dct'
+        filter_dim: 7
     trainable: True
-  filter_weights:
-    initialisation:
-      multiplier: 0.01
-      parameters:
-        name: 'uniform'
-    trainable: True
-
-measurement_model:
-  forward_operator: 'Identity'
-  noise_level: 0.1
 
 inner_energy:
   type: 'OptimisationEnergy'
@@ -30,6 +26,7 @@ inner_energy:
       name: 'FixedIterationsStopping'
 
 bilevel:
+  loss: 'L2Loss'
   optimiser:
     name: 'Adam'
     parameters: {lr: 0.0005}

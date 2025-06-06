@@ -17,7 +17,11 @@ class Potential(ABC, torch.nn.Module):
             num_potentials equals the number of filters used in the FoE-model.
         """
         super().__init__()
-        self.register_buffer('num_potentials', torch.tensor(num_potentials, dtype=torch.uint16))
+        num_potentials = torch.tensor(num_potentials, dtype=torch.uint16)
+        self.register_buffer('num_potentials', num_potentials)
+
+    def get_num_potentials(self) -> int:
+        return self.num_potentials.item()
 
     @abstractmethod
     def get_parameters(self):

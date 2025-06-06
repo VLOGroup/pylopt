@@ -6,14 +6,17 @@ from torch.utils.data import DataLoader
 from confuse import Configuration
 import argparse
 
-from bilevel_optimisation.utils.LoggingUtils import setup_logger
-from bilevel_optimisation.utils.SeedingUtils import seed_random_number_generators
 from bilevel_optimisation.utils.ConfigUtils import load_app_config, parse_datatype
-from bilevel_optimisation.utils.SetupUtils import (set_up_regulariser, set_up_measurement_model,
-                                                   set_up_inner_energy)
-from bilevel_optimisation.dataset.ImageDataset import TestImageDataset
+
 from bilevel_optimisation.utils.DatasetUtils import collate_function
 from bilevel_optimisation.evaluation.Evaluation import compute_psnr
+from bilevel_optimisation.dataset.ImageDataset import TestImageDataset
+from bilevel_optimisation.utils.LoggingUtils import setup_logger
+from bilevel_optimisation.utils.SeedingUtils import seed_random_number_generators
+from bilevel_optimisation.utils.SetupUtils import (set_up_regulariser, set_up_measurement_model,
+                                                   set_up_inner_energy)
+from bilevel_optimisation.visualisation.Visualisation import visualise_filter_responses
+
 
 def load_data_from_file(root_path: str, file_name: str) -> torch.Tensor:
     file_path = os.path.join(root_path, file_name)
@@ -28,7 +31,7 @@ def denoise(config: Configuration):
     test_loader = DataLoader(test_image_dataset, batch_size=len(test_image_dataset), shuffle=False,
                              collate_fn=lambda x: collate_function(x, crop_size=-1))
 
-    regulariser = set_up_regulariser(config, device)
+    regulariser = set_up_regulariser(config)
     regulariser = regulariser.to(device=device, dtype=dtype)
 
     test_batch = list(test_loader)[0]
@@ -41,6 +44,8 @@ def denoise(config: Configuration):
     t0 = time.time()
     test_batch_denoised = energy.argmin(energy.measurement_model.obs_noisy)
     t1 = time.time()
+
+    visualise_filter_responses(regulariser, test_batch_denoised)
 
     print('denoising stats:')
     print(' > elapsed time [s] = {:.5f}'.format(t1 - t0))

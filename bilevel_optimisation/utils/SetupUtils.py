@@ -33,6 +33,8 @@ def get_model_data_dir_path(config: Configuration) -> str:
     return model_data_dir
 
 def set_up_image_filter(config: Configuration) -> ImageFilter:
+    filter_data = None
+
     trainable = config['regulariser']['image_filter']['trainable'].get()
     padding_mode = config['regulariser']['image_filter']['padding_mode'].get()
     filter_file = config['regulariser']['image_filter']['initialisation']['file'].get()
@@ -41,9 +43,23 @@ def set_up_image_filter(config: Configuration) -> ImageFilter:
     if filter_file:
         model_data_dir_path = get_model_data_dir_path(config)
         filter_data = torch.load(os.path.join(model_data_dir_path, filter_file))
+
+        initialisation_dict = filter_data['initialisation_dict']
+        filter_dim = initialisation_dict['filter_dim']
+        padding_mode = initialisation_dict['padding_mode']
+
+        dummy_filter_data = torch.ones(filter_dim ** 2 - 1, 1, filter_dim, filter_dim)
+        dummy_filter_spec = ParamSpec(dummy_filter_data, trainable=trainable, parameters={'padding_mode': padding_mode})
+        image_filter = ImageFilter(dummy_filter_spec)
+
+        state_dict = filter_data['state_dict']
+        image_filter.load_state_dict(state_dict)
+
+        with torch.no_grad():
+            image_filter.filter_tensor.copy_(image_filter.filter_tensor * filter_multiplier)
     else:
-        filter_dim = config['regulariser']['filters']['initialisation']['parameters']['filter_dim'].get()
-        filter_name = config['regulariser']['filters']['initialisation']['parameters']['filter_name'].get()
+        filter_dim = config['regulariser']['image_filter']['initialisation']['parameters']['filter_dim'].get()
+        filter_name = config['regulariser']['image_filter']['initialisation']['parameters']['name'].get()
 
         if filter_name == 'dct':
             can_basis = np.reshape(np.eye(filter_dim ** 2, dtype=np.float64), (filter_dim ** 2, filter_dim, filter_dim))
@@ -57,9 +73,11 @@ def set_up_image_filter(config: Configuration) -> ImageFilter:
         if filter_name == 'randn':
             filter_data = torch.randn(filter_dim ** 2 - 1, 1, filter_dim, filter_dim)
 
-    filter_spec = ParamSpec(filter_data * filter_multiplier, trainable=trainable,
-                            parameters={'padding_mode': padding_mode})
-    return ImageFilter(filter_spec)
+        filter_data = filter_data * filter_multiplier
+        filter_spec = ParamSpec(filter_data, trainable=trainable,
+                                parameters={'padding_mode': padding_mode})
+        image_filter = ImageFilter(filter_spec)
+    return image_filter
 
 def set_up_gaussian_mixture(config: Configuration, num_filters: int) -> GaussianMixture:
     potential_file = config['regulariser']['potential']['parameters']['gaussian_mixture']['parameters'].get()

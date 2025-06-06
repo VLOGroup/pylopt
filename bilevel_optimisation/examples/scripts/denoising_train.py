@@ -8,6 +8,7 @@ import argparse
 
 from bilevel_optimisation.dataset.ImageDataset import TestImageDataset, TrainingImageDataset
 from bilevel_optimisation.evaluation.Evaluation import evaluate_on_test_data
+from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
 from bilevel_optimisation.utils.DatasetUtils import collate_function
 from bilevel_optimisation.utils.LoggingUtils import (setup_logger, log_trainable_params_stats,
                                                      log_gradient_norms)
@@ -18,27 +19,35 @@ from bilevel_optimisation.utils.SetupUtils import (set_up_regulariser, set_up_bi
                                                    set_up_outer_loss)
 from bilevel_optimisation.utils.ConfigUtils import parse_datatype, load_app_config
 from bilevel_optimisation.visualisation.Visualisation import (visualise_training_stats, visualise_filter_stats,
-                                                              visualise_filters, visualise_gmm_potential)
+                                                              visualise_filters, visualise_gmm_potential,
+                                                              visualise_student_t_training_stats,
+                                                              visualise_student_t_potential)
 
-def visualise_intermediate_results(regulariser: torch.nn.Module, device: torch.device, dtype: torch.dtype,
+def visualise_intermediate_results(regulariser: FieldsOfExperts, device: torch.device, dtype: torch.dtype,
                                    curr_iter: int, path_to_data_dir: str, filter_image_subdir: str = 'filters',
                                    potential_image_subdir: str = 'potential') -> None:
     # visualise filters
     filter_images_dir_path = os.path.join(path_to_data_dir, filter_image_subdir)
     if not os.path.exists(filter_images_dir_path):
         os.makedirs(filter_images_dir_path, exist_ok=True)
-    visualise_filters(regulariser.get_filters(), regulariser.get_potential().get_parameters(),
-                      fig_dir_path=filter_images_dir_path, file_name='filters_iter_{:d}.png'.format(curr_iter + 1))
+    visualise_filters(regulariser.get_image_filter().get_filter_tensor(), fig_dir_path=filter_images_dir_path,
+                      file_name='filters_iter_{:d}.png'.format(curr_iter + 1))
 
     # visualise potential functions (per filter)
     potential = regulariser.get_potential()
     if type(potential).__name__ == 'GaussianMixture':
         potential_images_dir_path = os.path.join(path_to_data_dir, potential_image_subdir)
-        if not os.path.exists(potential_images_dir_path):
-            os.makedirs(potential_images_dir_path, exist_ok=True)
 
         visualise_gmm_potential(potential, device, dtype, fig_dir_path=potential_images_dir_path,
                                 file_name='potential_iter_{:d}.png'.format(curr_iter + 1))
+
+    if type(potential).__name__ == 'StudentT':
+        potential_images_dir_path = os.path.join(path_to_data_dir, potential_image_subdir)
+        if not os.path.exists(potential_images_dir_path):
+            os.makedirs(potential_images_dir_path, exist_ok=True)
+        visualise_student_t_potential(regulariser.get_potential(), device, dtype, potential_images_dir_path,
+                                      file_name='potential_iter_{:d}.png'.format(curr_iter + 1))
+
 
 def train_bilevel(config: Configuration):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -57,8 +66,6 @@ def train_bilevel(config: Configuration):
                              collate_fn=lambda x: collate_function(x, crop_size=-1))
 
     regulariser = set_up_regulariser(config)
-    regulariser = regulariser.to(device=device, dtype=dtype)
-    regulariser = set_up_regulariser(config, device)
     regulariser = regulariser.to(device=device, dtype=dtype)
     bilevel = set_up_bilevel_problem(regulariser.parameters(), config)
     bilevel = bilevel.to(device=device, dtype=dtype)
@@ -80,7 +87,7 @@ def train_bilevel(config: Configuration):
     writer = SummaryWriter(log_dir=os.path.join(path_to_eval_dir, 'tensorboard'))
 
     evaluation_freq = 2
-    max_num_iterations = 2
+    max_num_iterations = 200
     try:
         for k, batch in enumerate(train_loader):
 
@@ -94,8 +101,10 @@ def train_bilevel(config: Configuration):
                 train_loss = bilevel.forward(outer_loss, inner_energy)
 
                 train_loss_list.append(train_loss.detach().cpu().item())
-                filters_list.append(regulariser.get_image_filter().get_filter_tensor())
-                potential_param_list.append(regulariser.get_potential().get_parameters())
+                filter_tensor = regulariser.get_image_filter().get_filter_tensor().detach().clone()
+                filters_list.append(filter_tensor)
+                potential_params = regulariser.get_potential().get_parameters().detach().clone()
+                potential_param_list.append(potential_params)
                 logging.info('[TRAIN] iteration [{:d} / {:d}]: '
                              'loss = {:.5f}'.format(k + 1, max_num_iterations, train_loss.detach().cpu().item()))
 
@@ -128,7 +137,10 @@ def train_bilevel(config: Configuration):
         save_foe_model(regulariser, os.path.join(path_to_eval_dir, 'models'), model_dir_name='final')
 
         visualise_training_stats(train_loss_list, test_loss_list, psnr_list, evaluation_freq, path_to_eval_dir)
-        visualise_filter_stats(filters_list, potential_param_list, path_to_eval_dir)
+        visualise_filter_stats(filters_list, path_to_eval_dir)
+
+        if type(regulariser.get_potential()).__name__ == 'StudentT':
+            visualise_student_t_training_stats(potential_param_list, path_to_eval_dir)
 
 def main():
     seed_random_number_generators(123)
