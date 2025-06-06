@@ -1,6 +1,7 @@
 import os
 import time
 import matplotlib.pyplot as plt
+from matplotlib import colormaps as cmaps
 import torch
 from torch.utils.data import DataLoader
 from confuse import Configuration
@@ -60,16 +61,23 @@ def denoise(config: Configuration):
 
         fig = plt.figure()
         ax_clean = fig.add_subplot(1, 3, 1)
-        ax_clean.imshow(item_clean.squeeze().detach().cpu().numpy())
+        ax_clean.imshow(item_clean.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
         ax_clean.set_title('clean')
+        ax_clean.xaxis.set_visible(False)
+        ax_clean.yaxis.set_visible(False)
 
         ax_noisy = fig.add_subplot(1, 3, 2)
-        ax_noisy.imshow(item_noisy.squeeze().detach().cpu().numpy())
+        ax_noisy.imshow(item_noisy.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
         ax_noisy.set_title('noisy')
+        ax_noisy.xaxis.set_visible(False)
+        ax_noisy.yaxis.set_visible(False)
 
         ax_denoised = fig.add_subplot(1, 3, 3)
-        ax_denoised.imshow(item_denoised.squeeze().detach().cpu().numpy())
+        ax_denoised.imshow(item_denoised.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
         ax_denoised.set_title('denoised')
+        ax_denoised.xaxis.set_visible(False)
+        ax_denoised.yaxis.set_visible(False)
+
         plt.show()
 
 def main():
