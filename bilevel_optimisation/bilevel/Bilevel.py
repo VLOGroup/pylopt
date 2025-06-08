@@ -62,8 +62,7 @@ class Bilevel(torch.nn.Module):
             def closure():
                 self._optimiser.zero_grad()
                 with torch.enable_grad():
-                    loss = self._gradient_func.apply(inner_energy, outer_loss, solver,
-                                                     *trainable_parameters)
+                    loss = self._gradient_func.apply(inner_energy, outer_loss, solver, *trainable_parameters)
                     loss.backward()
                 return loss
 
@@ -79,20 +78,6 @@ class Bilevel(torch.nn.Module):
             logging.info('[BILEVEL] performed update step')
             logging.info('[BILEVEL]  > elapsed time [s]: {:.5f}'.format(t1 - t0))
         return curr_loss
-
-class BilevelUnrolling(Function):
-    """
-    Subclass of torch.autograd.Function with the purpose to provide a custom backward
-    function based on an unrolling scheme.
-    """
-    @staticmethod
-    def forward(ctx: FunctionCtx, inner_energy: InnerEnergy, x_clean: torch.Tensor,
-                loss_func: Callable, *params: List[torch.nn.Parameter]) -> torch.Tensor:
-        raise NotImplementedError('Not implemented yet')
-
-    @staticmethod
-    def backward(ctx: Any, *grad_outputs: Any) -> Any:
-        raise NotImplementedError('Not implemented yet')
 
 class BilevelDifferentiation(Function):
     """
@@ -124,7 +109,6 @@ class BilevelDifferentiation(Function):
         :param params: List of PyTorch parameters whose gradients need to be computed.
         :return: Current outer loss
         """
-        logging.debug('[BILEVEL] custom forward pass (differentiation)')
         x_noisy = inner_energy.measurement_model.obs_noisy
 
         x_denoised = inner_energy.argmin(x_noisy)
@@ -158,10 +142,6 @@ class BilevelDifferentiation(Function):
 
         lin_operator = lambda z: inner_energy.hvp_state(x_denoised, z)
         lagrange_multiplier_result = solver.solve(lin_operator, -grad_outer_loss)
-        # logging.debug('[BILEVEL] linear system solver stats')
-        # logging.debug('[BILEVEL] > num_iterations: {:d}'.format(lagrange_multiplier_result.stats.num_iterations))
-        # final_residual = lagrange_multiplier_result.stats.residual_norm_list[-1]
-        # logging.debug('[BILEVEL] > norm of final residual: {:.9f}'.format(final_residual))
 
         return lagrange_multiplier_result.solution
 
@@ -189,6 +169,34 @@ class BilevelDifferentiation(Function):
         lagrange_multiplier = BilevelDifferentiation.compute_lagrange_multiplier(outer_loss_func, inner_energy,
                                                                                  x_denoised, solver)
         grad_params = inner_energy.hvp_mixed(x_denoised.detach(), lagrange_multiplier)
+        inner_energy.zero_grad()
+
+        return None, None, None, *grad_params
+
+
+class BilevelUnrolling(Function):
+    """
+    Subclass of torch.autograd.Function with the purpose to provide a custom backward
+    function based on an unrolling scheme.
+    """
+    @staticmethod
+    def forward(ctx: FunctionCtx, inner_energy: InnerEnergy,
+                loss_func: torch.nn.Module, solver: LinearSystemSolver, *params) -> torch.Tensor:
+
+        x_noisy = inner_energy.measurement_model.obs_noisy
+        x_denoised = inner_energy.argmin(x_noisy)
+
+        with torch.enable_grad():
+            y = loss_func(x_denoised)
+        dx_dtheta = torch.autograd.grad(outputs=y, inputs=[p for p in inner_energy.parameters() if p.requires_grad])
+
+        return loss_func(x_denoised)
+
+    @staticmethod
+    def backward(ctx: FunctionCtx, *grad_output: torch.Tensor) -> Any:
+
+
+
         inner_energy.zero_grad()
 
         return None, None, None, *grad_params

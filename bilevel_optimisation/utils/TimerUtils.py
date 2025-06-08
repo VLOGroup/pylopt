@@ -1,5 +1,9 @@
 import torch
 
+# TODO
+#   > extend timer class such that CUDA events are used iff CUDA is used
+#       for compuations. if not use time.time() ...
+
 class CUDATimer:
     def __init__(self):
         pass

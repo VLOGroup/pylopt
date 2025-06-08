@@ -3,6 +3,7 @@ import torch
 import numpy as np
 import logging
 
+from bilevel_optimisation.data.Constants import MAX_NUM_UNROLLING_ITER
 
 class BaseNAGOptimiser(torch.optim.Optimizer):
     """
@@ -151,8 +152,7 @@ class NAGOptimiser(BaseNAGOptimiser):
         sufficient descent (descent lemma) is obtained.
 
         :param params: List of trainable parameters
-        :param closure: Closure function, corresponding to the loss function of the problem. Is evaluated
-            in backtracking loop
+        :param closure: Closure function, corresponding to the loss function of the problem
         :return: Altered list of parameters
         """
         loss = closure()
@@ -185,6 +185,16 @@ class NAGOptimiser(BaseNAGOptimiser):
         """
         Function which performs update step.
 
+        ------------------------
+
+        # TODO
+        #   > current implementation is alternating w.r.t to param_groups.
+        #   > this should be considered in AlternatingNAGOptimiser - but not here!
+        #   > Since currently in all the scripts of this project parameter groups were NOT used,
+        #       it doesn't make a difference. Nevertheless: FIX ME!!!
+
+        ------------------------
+
         :param closure: Loss function which is required for this optimisation procedure.
         :return: Loss after update step is performed
         """
@@ -213,3 +223,64 @@ class NAGOptimiser(BaseNAGOptimiser):
                 trainable_params = self._line_search_backtracking(trainable_params, closure)
 
         return closure()
+
+    def step_unroll(self, loss_func: Callable, num_iterations: int) -> torch.Tensor:
+
+        params_unrolling = [[p.detach().clone().requires_grad_(True) for p in group['params'] if p.requires_grad]
+                        for group in self.param_groups]
+
+        for k in range(0, min(num_iterations, MAX_NUM_UNROLLING_ITER)):
+            if not self._beta:
+                theta_new = 0.5 * (1 + np.sqrt(1 + 4 * (self._theta ** 2)))
+                beta = (self._theta - 1) / theta_new
+                self._theta = theta_new
+            else:
+                beta = self._beta
+
+            for group_idx, group in enumerate(params_unrolling):
+                group_params_inter = []
+                for p in group:
+                    state = self.state[p]
+
+                    if 'history' not in state:
+                        state['history'] = p.data.clone()
+
+                    momentum = p.data - state['history']
+                    state['history'] = p.data.clone()
+                    p = p + beta * momentum
+                    group_params_inter.append(p)
+                params_unrolling[group_idx] = group_params_inter
+
+            params_unrolling_flat = [p for group in params_unrolling for p in group]
+            y = loss_func(*params_unrolling_flat)
+            grad_list = list(torch.autograd.grad(outputs=y, inputs=params_unrolling_flat, create_graph=True))
+
+            # TODO
+            #   > backtracking line search!
+
+            idx = 0
+            for group_idx, group in enumerate(self.param_groups):
+                group_params = params_unrolling_flat[group_idx]
+                group_size = len(group['params'])
+                group_grads = grad_list[idx: idx + group_size]
+
+                step_size = 1e-4
+                tmp_param_list = []
+                for p, grad in zip(group_params, group_grads):
+                    p = p - step_size * grad
+                    if hasattr(p, 'prox'):
+                        p = p.prox(p.data, step_size)
+
+                    if hasattr(p, 'proj'):
+                        p = p.prox(p.data)
+
+                    tmp_param_list.append(p)
+                params_unrolling[group_idx] = tmp_param_list
+                idx += group_size
+
+        with torch.no_grad():
+            for group, unrolled_group in zip(self.param_groups, params_unrolling):
+                for p, new_p in zip(group['params'], unrolled_group):
+                    p.copy_(new_p)
+
+        return y

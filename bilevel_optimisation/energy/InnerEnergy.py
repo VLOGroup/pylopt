@@ -117,9 +117,9 @@ class OptimisationEnergy(InnerEnergy):
         """
         Initialisation of an object of class InnerEnergy
 
-        :param measurement_model: See InnerEnergy
-        :param regulariser: See InnerEnergy
-        :param lam: See InnerEnergy
+        :param measurement_model: See base class
+        :param regulariser: See base class
+        :param lam: See base class
         :param optimiser_factory: A callable which maps a set of tensors to an optimiser optimising
             these variables/parameters. For example, the optimiser_factory may map the list [x] for a tensor
             x to torch.optim.Adam([x], lr=1e-3).
@@ -202,17 +202,43 @@ class OptimisationEnergy(InnerEnergy):
 class UnrollingEnergy(InnerEnergy):
     """
     Class which solves the inner problem by means of an unrolling scheme.
-
-        >> TO BE IMPLEMENTED <<
-
     """
 
-    def __init__(self, measurement_model: MeasurementModel,
-                 regulariser: torch.nn.Module, lam: float) -> None:
+    def __init__(self, measurement_model: MeasurementModel, regulariser: torch.nn.Module, lam: float,
+                 optimiser_factory: Callable) -> None:
         super().__init__(measurement_model, regulariser, lam)
 
-    def sample(self, num_sampling_steps: int) -> torch.Tensor:
-        raise NotImplementedError('Sampling is not implemented.')
+        super().__init__(measurement_model, regulariser, lam)
+        self._optimiser_factory = optimiser_factory
 
-    def argmin(self, x: torch.Tensor) -> torch.Tensor:
-        raise NotImplementedError('Minimisation is not implemented.')
+    def _build_loss_func_factory(self, optimiser: torch.optim.Optimizer) -> Optional[Callable]:
+        IMPLEMENT ME!
+
+    def argmin(self, x: torch.Tensor, num_iterations: int=5) -> torch.Tensor:
+        logging.info('[INNER] perform argmin to compute MAP estimate')
+
+        x_ = x.detach().clone()
+        x_.requires_grad = True
+        optimiser, stopping, prox_map_factory = self._optimiser_factory([x_])
+        if prox_map_factory is not None:
+            setattr(x_, 'prox', prox_map_factory(x))
+
+        optimiser.zero_grad()
+
+        # TODO:
+        #   > loss_function factory is required similar to closure factory
+        #   > if use_prox, loss function needs to be adjusted!!
+
+        t0 = time.time()
+        _ = optimiser.step_unroll(lambda z: self(z), num_iterations)
+        t1 = time.time()
+
+        logging.info('[INNER] computed MAP estimate')
+        logging.info('[INNER]  > number of iterations: {:d}'.format(num_iterations))
+        logging.info('[INNER]  > elapsed time [s]: {:.5f}'.format(t1 - t0))
+
+
+
+
+
+        return x_

@@ -1,12 +1,22 @@
 # Release notes
 
+## [Ideas]
+
+- Wrapper for Optimisers
+  - Current NAG-type implementations use closure functions for reevaluation of the loss and gradient computation.
+  - The backtracking approach does not need multiple gradient computations, but multiple loss evaluations. Doing
+    both every time is expansive.
+  - Instead of passing closures, one could instead pass a callable representing the loss function. As a consequence, 
+    gradients would need to be computed in the step method of the optimiser ... Disadvantages?!?
+
 ## [Unreleased]
 
 ### Features
 
 - Use CUDA kernel to speed up training and prediction with gmm potentials
 - Implement inner energy using unrolling scheme
-- Improve handling of proximal maps
+- Improved handling of proximal maps
+- Deal properly with param_groups in NAGOptimiser
 
 ## [2.0.0]
 

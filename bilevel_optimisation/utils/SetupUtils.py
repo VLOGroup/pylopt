@@ -14,6 +14,7 @@ from bilevel_optimisation.bilevel.Bilevel import Bilevel
 from bilevel_optimisation.data.OptimiserSpec import OptimiserSpec
 from bilevel_optimisation.data.ParamSpec import ParamSpec
 from bilevel_optimisation.data.SolverSpec import SolverSpec
+from bilevel_optimisation.energy import OptimisationEnergy, UnrollingEnergy
 from bilevel_optimisation.energy.InnerEnergy import InnerEnergy
 from bilevel_optimisation.factories.BuildFactory import build_solver_factory
 from bilevel_optimisation.factories.BuildFactory import build_optimiser_factory, build_prox_map_factory
@@ -186,6 +187,15 @@ def load_optimiser_class(optimiser_name: str, projected: bool=False) -> type[tor
 
     return optimiser_cls
 
+def load_backward_mode(config: Configuration):
+    energy_type = config['inner_energy']['type'].get()
+    if energy_type == OptimisationEnergy.__name__:
+        return 'differentiation'
+    elif energy_type == UnrollingEnergy.__name__:
+        return 'unrolling'
+    else:
+        raise ValueError('Unknown energy type - cannot assign differentiation mode.')
+
 def set_up_bilevel_problem(parameters: Iterator[torch.nn.Parameter], config: Configuration) -> Bilevel:
     optimiser_name = config['bilevel']['optimiser']['name'].get()
     optimiser_params = config['bilevel']['optimiser']['parameters'].get()
@@ -196,8 +206,11 @@ def set_up_bilevel_problem(parameters: Iterator[torch.nn.Parameter], config: Con
     solver_params = config['bilevel']['solver']['parameters'].get()
     solver_cls = getattr(solver, solver_name)
 
-    return Bilevel(optimiser_, build_solver_factory(SolverSpec(solver_class=solver_cls,
-                                                               solver_params=solver_params)))
+    backward_mode = load_backward_mode(config)
+
+    return Bilevel(optimiser_,
+                   build_solver_factory(SolverSpec(solver_class=solver_cls, solver_params=solver_params)),
+                   backward_mode=backward_mode)
 
 def set_up_measurement_model(data: torch.Tensor, config: Configuration) -> MeasurementModel:
     noise_level = config['measurement_model']['noise_level'].get()
