@@ -5,8 +5,25 @@
 ### Features
 
 - Use CUDA kernel to speed up training and prediction with gmm potentials
-- Use filter_weights as parameters of the StudentT potential only
+- Implement inner energy using unrolling scheme
 - Improve handling of proximal maps
+
+## [2.0.0]
+
+### Features
+
+- Improved setup handling
+  - Filter module, which allows to save and load filters using state dictionaries
+  - Filter weights considered as part of Student-T potential
+- Extended visualisations
+  - Visualisation of negative log Student-T potentials
+  - Visualisation of filter responses by means of violon plots
+- Extension of Readme file
+
+### Fixes
+
+- Test data loader couldn't load images of different size - introduced padding
+to fix this issue.
 
 ## [1.1.3]
 

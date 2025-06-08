@@ -36,5 +36,5 @@ generated binary files in the building process of the wheel.
 # Run Tensorboard
 
 Activate a virtual environment with pre-installed Tensorboard (if not installed, simply run `pip install tensorboard`).
-Then, in a shell type `tensorboard --logdir=<path_to_tfevents_dir>`. Then the dashboard of Tensorboard is per 
-default available at `http://localhost:6006/`.
+Then, in a shell type `tensorboard --logdir=<path_to_tfevents_dir>`. Then the dashboard of Tensorboard is (per 
+default) available at `http://localhost:6006/`.
