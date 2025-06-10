@@ -12,6 +12,7 @@ from bilevel_optimisation.utils.ConfigUtils import load_app_config, parse_dataty
 from bilevel_optimisation.utils.DatasetUtils import collate_function
 from bilevel_optimisation.evaluation.Evaluation import compute_psnr
 from bilevel_optimisation.dataset.ImageDataset import TestImageDataset
+from bilevel_optimisation.energy.InnerEnergy import UnrollingEnergy
 from bilevel_optimisation.utils.LoggingUtils import setup_logger
 from bilevel_optimisation.utils.SeedingUtils import seed_random_number_generators
 from bilevel_optimisation.utils.SetupUtils import (set_up_regulariser, set_up_measurement_model,
@@ -44,9 +45,13 @@ def denoise(config: Configuration):
 
     t0 = time.time()
     test_batch_denoised = energy.argmin(energy.measurement_model.obs_noisy)
+    if type(energy).__name__ == UnrollingEnergy.__name__:
+        num_unrolling_cycles = 100
+        for i in range(0, num_unrolling_cycles):
+            test_batch_denoised = energy.argmin(test_batch_denoised)
     t1 = time.time()
 
-    visualise_filter_responses(regulariser, test_batch_denoised)
+    # visualise_filter_responses(regulariser, test_batch_denoised)
 
     print('denoising stats:')
     print(' > elapsed time [s] = {:.5f}'.format(t1 - t0))
@@ -79,6 +84,7 @@ def denoise(config: Configuration):
         ax_denoised.yaxis.set_visible(False)
 
         plt.show()
+        plt.close(fig)
 
 def main():
     seed_random_number_generators(123)

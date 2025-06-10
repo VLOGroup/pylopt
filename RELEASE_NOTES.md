@@ -18,6 +18,7 @@
 - Improved handling of proximal maps
 - Deal properly with param_groups in NAGOptimiser
 
+
 ## [2.0.0]
 
 ### Features

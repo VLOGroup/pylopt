@@ -182,21 +182,22 @@ class BilevelUnrolling(Function):
     @staticmethod
     def forward(ctx: FunctionCtx, inner_energy: InnerEnergy,
                 loss_func: torch.nn.Module, solver: LinearSystemSolver, *params) -> torch.Tensor:
-
         x_noisy = inner_energy.measurement_model.obs_noisy
         x_denoised = inner_energy.argmin(x_noisy)
 
         with torch.enable_grad():
-            y = loss_func(x_denoised)
-        dx_dtheta = torch.autograd.grad(outputs=y, inputs=[p for p in inner_energy.parameters() if p.requires_grad])
+            loss = loss_func(x_denoised)
+        grad_params = torch.autograd.grad(outputs=loss, inputs=[p for p in inner_energy.parameters() if p.requires_grad])
 
-        return loss_func(x_denoised)
+        ctx.grad_params = grad_params
+        ctx.inner_energy = inner_energy
+        return loss
 
     @staticmethod
     def backward(ctx: FunctionCtx, *grad_output: torch.Tensor) -> Any:
 
-
-
+        grad_params = ctx.grad_params
+        inner_energy = ctx.inner_energy
         inner_energy.zero_grad()
 
         return None, None, None, *grad_params

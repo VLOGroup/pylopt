@@ -17,8 +17,9 @@ inner_energy:
   type: 'UnrollingEnergy'
   lam: 0.5
   optimiser:
-    name: 'NAGOptimiser'
+    name: 'UnrollingNAGOptimiser'
     use_prox: False
+    parameters: {alpha: 0.0001}
     stopping:
       name: 'FixedIterationsStopping'
       parameters: {max_num_iterations: 10}

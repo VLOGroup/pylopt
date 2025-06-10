@@ -1,7 +1,6 @@
-from typing import Union, Iterable, Dict, Any, Callable, List
+from typing import Union, Iterable, Dict, Any, Callable, List, Tuple, Optional
 import torch
 import numpy as np
-import logging
 
 from bilevel_optimisation.data.Constants import MAX_NUM_UNROLLING_ITER
 
@@ -28,6 +27,7 @@ class BaseNAGOptimiser(torch.optim.Optimizer):
         :param max_num_bt_iterations: Maximal number of backtracking iterations - again,
             for constant step sizes this is not required.
         """
+        self._theta = 0.0
         self._alpha = alpha
         self._beta = beta
 
@@ -48,7 +48,6 @@ class BaseNAGOptimiser(torch.optim.Optimizer):
         :return: Parameter whose value is updated.
         """
         if hasattr(p, 'prox'):
-            logging.debug('[NAG] apply prox map')
             p.data.copy_(p.prox(p.data, step_size))
         return p
 
@@ -63,9 +62,39 @@ class BaseNAGOptimiser(torch.optim.Optimizer):
         :return: Parameter whose value is updated.
         """
         if hasattr(p, 'proj'):
-            logging.debug('[NAG] apply projection')
             p.data.copy_(p.proj(p.data))
         return p
+
+    def _momentum_param(self) -> float:
+        if not self._beta:
+            theta_new = 0.5 * (1 + np.sqrt(1 + 4 * (self._theta ** 2)))
+            beta = (self._theta - 1) / theta_new
+            self._theta = theta_new
+        else:
+            beta = self._beta
+        return beta
+
+    @staticmethod
+    def _compute_quadratic_approximation(params_new: List[torch.Tensor], loss: torch.Tensor,
+                                         params: List[torch.Tensor],
+                                         grads: List[torch.Tensor], lip_const: float) -> torch.Tensor:
+        """
+        Function which computes the quadratic approximation of the loss function of the optimisation
+        function. It is used when searching via backtracking for a step size which guarantees
+        sufficient descent.
+
+        :param params_new: List of new parameter candidates
+        :param loss: Value of loss function at current parameters
+        :param params: List of current parameters
+        :param grads: List of gradient of current parameters
+        :param lip_const: Current guess of the gradients Lipschitz constant
+        :return: Quadratic approximation of loss.
+        """
+        quadr_approx = loss.clone()
+        for p_new, p, grad_p in zip(params_new, params, grads):
+            quadr_approx += (torch.sum(grad_p * (p_new.data - p.data)) +
+                                 0.5 * lip_const * torch.sum((p_new.data - p.data) ** 2))
+        return quadr_approx
 
 class NAGOptimiser(BaseNAGOptimiser):
     """
@@ -102,7 +131,6 @@ class NAGOptimiser(BaseNAGOptimiser):
         :param max_num_bt_iterations:
         """
         super().__init__(params, alpha, beta, lip_const_default, max_num_bt_iterations)
-        self._theta = 0.0
         self._lip_const = lip_const_default
 
     def _line_search_constant(self, params: List[torch.nn.Parameter],
@@ -124,26 +152,6 @@ class NAGOptimiser(BaseNAGOptimiser):
             p = self._apply_prox_map(p, self._alpha)
             p = self._apply_projection(p)
         return params
-
-    def _compute_quadratic_approximation(self, params_new: List[torch.Tensor], loss: torch.Tensor,
-                                         params: List[torch.Tensor],
-                                         grads: List[torch.Tensor]) -> torch.Tensor:
-        """
-        Function which computes the quadratic approximation of the loss function of the optimisation
-        function. It is used when searching via backtracking for a step size which guarantees
-        sufficient descent.
-
-        :param params_new: List of new parameter candidates
-        :param loss: Value of loss function at current parameters
-        :param params: List of current parameters
-        :param grads: List of gradient of current parameters
-        :return: Quadratic approximation of loss.
-        """
-        quadr_approx = loss.clone()
-        for p_new, p, grad_p in zip(params_new, params, grads):
-            quadr_approx += (torch.sum(grad_p * (p_new.data - p.data)) +
-                                 0.5 * self._lip_const * torch.sum((p_new.data - p.data) ** 2))
-        return quadr_approx
 
     def _line_search_backtracking(self, params: List[torch.nn.Parameter],
                                   closure: Callable) -> List[torch.nn.Parameter]:
@@ -167,7 +175,8 @@ class NAGOptimiser(BaseNAGOptimiser):
                 p = self._apply_prox_map(p, step_size)
                 p = self._apply_projection(p)
 
-            quadratic_approx = self._compute_quadratic_approximation(params, loss, params_orig, grads_orig)
+            quadratic_approx = self._compute_quadratic_approximation(params, loss, params_orig,
+                                                                     grads_orig, self._lip_const)
             loss_new = closure()
             if loss_new <= quadratic_approx:
                 self._lip_const *= 0.9
@@ -198,12 +207,7 @@ class NAGOptimiser(BaseNAGOptimiser):
         :param closure: Loss function which is required for this optimisation procedure.
         :return: Loss after update step is performed
         """
-        if not self._beta:
-            theta_new = 0.5 * (1 + np.sqrt(1 + 4 * (self._theta ** 2)))
-            beta = (self._theta - 1) / theta_new
-            self._theta = theta_new
-        else:
-            beta = self._beta
+        beta = self._momentum_param()
 
         for group in self.param_groups:
             trainable_params = [p for p in group['params'] if p.requires_grad]
@@ -224,63 +228,119 @@ class NAGOptimiser(BaseNAGOptimiser):
 
         return closure()
 
-    def step_unroll(self, loss_func: Callable, num_iterations: int) -> torch.Tensor:
+class UnrollingNAGOptimiser(BaseNAGOptimiser):
 
-        params_unrolling = [[p.detach().clone().requires_grad_(True) for p in group['params'] if p.requires_grad]
-                        for group in self.param_groups]
+    def __init__(self, params: Union[Iterable[torch.Tensor], Iterable[Dict[str, Any]]],
+                 alpha: float = None, beta: float = None, lip_const_default: float = 10000000,
+                 max_num_bt_iterations: int = 10) -> None:
+        super().__init__(params, alpha, beta, lip_const_default, max_num_bt_iterations)
+        self._lip_const = lip_const_default
 
-        for k in range(0, min(num_iterations, MAX_NUM_UNROLLING_ITER)):
-            if not self._beta:
-                theta_new = 0.5 * (1 + np.sqrt(1 + 4 * (self._theta ** 2)))
-                beta = (self._theta - 1) / theta_new
-                self._theta = theta_new
-            else:
-                beta = self._beta
+    @torch.no_grad()
+    def step(self, closure: Callable) -> torch.Tensor:
+        raise NotImplementedError('step function is not implemented for unrolling-type optimisers')
 
-            for group_idx, group in enumerate(params_unrolling):
-                group_params_inter = []
-                for p in group:
-                    state = self.state[p]
-
-                    if 'history' not in state:
-                        state['history'] = p.data.clone()
-
-                    momentum = p.data - state['history']
+    def _make_intermediate_step(self, params_grouped: List[List[torch.nn.Parameter]]) -> List[List[torch.nn.Parameter]]:
+        beta = self._momentum_param()
+        for group_idx, group in enumerate(params_grouped):
+            group_params_inter = []
+            for p in group:
+                state = self.state[p]
+                if 'history' not in state:
                     state['history'] = p.data.clone()
-                    p = p + beta * momentum
-                    group_params_inter.append(p)
-                params_unrolling[group_idx] = group_params_inter
 
-            params_unrolling_flat = [p for group in params_unrolling for p in group]
-            y = loss_func(*params_unrolling_flat)
-            grad_list = list(torch.autograd.grad(outputs=y, inputs=params_unrolling_flat, create_graph=True))
+                momentum = p.data - state['history']
+                state['history'] = p.data.clone()
 
-            # TODO
-            #   > backtracking line search!
+                p = p + beta * momentum
+                group_params_inter.append(p)
+            params_grouped[group_idx] = group_params_inter
 
-            idx = 0
-            for group_idx, group in enumerate(self.param_groups):
-                group_params = params_unrolling_flat[group_idx]
-                group_size = len(group['params'])
-                group_grads = grad_list[idx: idx + group_size]
+        return params_grouped
 
-                step_size = 1e-4
-                tmp_param_list = []
-                for p, grad in zip(group_params, group_grads):
-                    p = p - step_size * grad
-                    if hasattr(p, 'prox'):
-                        p = p.prox(p.data, step_size)
+    @staticmethod
+    def _compute_gradients(params_grouped: List[List[torch.nn.Parameter]],
+                           loss_func: Callable) -> List[torch.Tensor]:
+        params_grouped_flat = [p for group in params_grouped for p in group]
+        with torch.enable_grad():
+            loss = loss_func(*params_grouped_flat)
+        grad_list = list(torch.autograd.grad(outputs=loss, inputs=params_grouped_flat, create_graph=True))
+        return grad_list
 
-                    if hasattr(p, 'proj'):
-                        p = p.prox(p.data)
+    def _apply_gradient_step(self, params_grouped: List[List[torch.nn.Parameter]],
+                              grad_list: List[torch.Tensor], step_size: float):
+        idx = 0
+        for group_idx, group in enumerate(self.param_groups):
+            group_size = len(group['params'])
 
-                    tmp_param_list.append(p)
-                params_unrolling[group_idx] = tmp_param_list
-                idx += group_size
+            tmp_param_list = []
+            for p, grad in zip(params_grouped[group_idx], grad_list[idx: idx + group_size]):
+                p = p - step_size * grad
+                self._apply_prox_map(p, step_size)
+                self._apply_projection(p)
+
+                tmp_param_list.append(p)
+            params_grouped[group_idx] = tmp_param_list
+            idx += group_size
+        return params_grouped
+
+    def _perform_backtracking(self, params_grouped: List[List[torch.nn.Parameter]],
+                                  grad_list: List[torch.Tensor], loss_func: Callable) -> List[List[torch.nn.Parameter]]:
+
 
         with torch.no_grad():
-            for group, unrolled_group in zip(self.param_groups, params_unrolling):
-                for p, new_p in zip(group['params'], unrolled_group):
-                    p.copy_(new_p)
+            params_grouped_flat = [p for group in params_grouped for p in group]
+            loss = loss_func(*params_grouped_flat)
 
-        return y
+            for group in params_grouped:
+                params_grouped = self._apply_gradient_step(params_grouped, grad_list, step_size)
+
+            for k in range(0, self._max_num_bt_iterations):
+                step_size = 1 / self._lip_const
+
+
+
+
+                    quadr_approx = ...
+
+                    if sufficient_descent:
+                        stop
+                    else:
+
+
+
+                loss_new = ...
+
+
+                DISTINGUISH:
+                    > num_groups == 1:
+                    > num_groups > 1:
+
+                quadratic_approx = self._compute_quadratic_approximation(params, loss, params_orig, grads_orig, )
+
+
+        # update step
+
+
+
+    @torch.enable_grad()
+    def step_unroll(self, loss_func: Callable, num_iterations: int) -> Tuple[torch.Tensor, List[torch.Tensor]]:
+        params_grouped = [[p.detach().clone().requires_grad_(True) for p in group['params'] if p.requires_grad]
+                           for group in self.param_groups]
+
+        dtype = [p for group in self.param_groups for p in group['params'] if p.requires_grad][0].dtype
+        loss = torch.tensor(-1.0, dtype=dtype)
+        for k in range(0, min(num_iterations, MAX_NUM_UNROLLING_ITER)):
+
+            params_grouped = self._make_intermediate_step(params_grouped)
+            grad_list = self._compute_gradients(params_grouped, loss_func)
+
+            if self._alpha:
+                So nicht:
+                loop über groups, dann update über gruppe zu spez. step size
+                self._apply_gradient_step(params_grouped, grad_list, self._alpha)
+            else:
+                self._line_search_backtracking()
+
+        return loss, [p for group in params_grouped for p in group]
+

@@ -3,7 +3,7 @@ import numpy as np
 import torch
 from confuse import Configuration
 from scipy.fftpack import idct
-from typing import Iterator
+from typing import Iterator, Callable
 from importlib import resources
 
 from bilevel_optimisation import optimiser
@@ -11,6 +11,7 @@ from bilevel_optimisation import solver
 from bilevel_optimisation import losses
 from bilevel_optimisation import energy
 from bilevel_optimisation.bilevel.Bilevel import Bilevel
+from bilevel_optimisation.data.Constants import MAX_NUM_OPTIMISER_DEFAULT_ITER
 from bilevel_optimisation.data.OptimiserSpec import OptimiserSpec
 from bilevel_optimisation.data.ParamSpec import ParamSpec
 from bilevel_optimisation.data.SolverSpec import SolverSpec
@@ -22,7 +23,7 @@ from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExper
 from bilevel_optimisation.filters.Filters import ImageFilter
 from bilevel_optimisation.optimiser import FixedIterationsStopping
 from bilevel_optimisation.optimiser.ProjectedOptimiser import create_projected_optimiser
-from bilevel_optimisation.optimiser import NAG_TYPE_OPTIMISER
+from bilevel_optimisation.optimiser import NAG_TYPE_OPTIMISER, UNROLLING_TYPE_OPTIMISER
 from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementModel
 from bilevel_optimisation.potential import GaussianMixture, StudentT, Potential
 
@@ -223,7 +224,15 @@ def set_up_outer_loss(data: torch.Tensor, config: Configuration):
     loss_cls = getattr(losses, loss_name)
     return loss_cls(data)
 
-def set_up_inner_energy(measurement_model, regulariser, config: Configuration) -> InnerEnergy:
+def load_energy_class(config: Configuration) -> type[InnerEnergy]:
+    energy_type = config['inner_energy']['type'].get()
+    if hasattr(energy, energy_type):
+        energy_cls = getattr(energy, energy_type)
+    else:
+        raise ValueError('Cannot find energy {:s}'.format(energy_type))
+    return energy_cls
+
+def load_optimiser_factory(config: Configuration) -> Callable:
     optimiser_name = config['inner_energy']['optimiser']['name'].get()
     optimiser_params = config['inner_energy']['optimiser']['parameters'].get()
     optimiser_cls = load_optimiser_class(optimiser_name)
@@ -234,7 +243,7 @@ def set_up_inner_energy(measurement_model, regulariser, config: Configuration) -
     if hasattr(optimiser, stopping_name):
         stopping_cls = getattr(optimiser, stopping_name)
     else:
-        stopping_cls = FixedIterationsStopping(max_num_iterations=1000)
+        stopping_cls = FixedIterationsStopping(max_num_iterations=MAX_NUM_OPTIMISER_DEFAULT_ITER)
 
     prox_map_factory = None
     if config['inner_energy']['optimiser']['use_prox'].get() and optimiser_name in NAG_TYPE_OPTIMISER:
@@ -246,13 +255,25 @@ def set_up_inner_energy(measurement_model, regulariser, config: Configuration) -
                                    stopping_class=stopping_cls, stopping_params=stopping_parameters,
                                    prox_map_factory=prox_map_factory)
     optimiser_factory = build_optimiser_factory(optimiser_spec)
+    return optimiser_factory
 
-    energy_type = config['inner_energy']['type'].get()
-    if hasattr(energy, energy_type):
-        energy_cls = getattr(energy, energy_type)
-    else:
-        raise ValueError('Cannot find energy {:s}'.format(energy_type))
+def optimiser_is_compatible(energy_cls: type[InnerEnergy], config: Configuration) -> bool:
+    ret_val = True
+    if energy_cls.__name__ == UnrollingEnergy.__name__:
+        optimiser_name = config['inner_energy']['optimiser']['name'].get()
+        optimiser_cls = load_optimiser_class(optimiser_name)
+        ret_val = optimiser_cls.__name__ in UNROLLING_TYPE_OPTIMISER
 
+    return ret_val
+
+def set_up_inner_energy(measurement_model, regulariser, config: Configuration) -> InnerEnergy:
+    energy_cls = load_energy_class(config)
+    optimiser_factory = load_optimiser_factory(config)
+
+    if not optimiser_is_compatible(energy_cls, config):
+        raise ValueError('Chosen optimiser and chosen energy are not compatible')
+
+    # load regularisation parameter
     lam = config['inner_energy']['lam'].get()
     return energy_cls(measurement_model, regulariser, lam, optimiser_factory)
 

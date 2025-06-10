@@ -134,8 +134,8 @@ class OptimisationEnergy(InnerEnergy):
         optimisers, such as SGD or Adam, do not need a closure function. In the latter cases, the closure-factory
         returns None for every input tensor.
 
-        :param optimiser:
-        :return:
+        :param optimiser: Instance of PyTorch optimiser
+        :return: Callable representing the closure taking into account if proximal gradient approach is used.
         """
         if type(optimiser).__name__ in NAG_TYPE_OPTIMISER:
             def closure_factory(x: torch.Tensor) -> Callable:
@@ -211,9 +211,6 @@ class UnrollingEnergy(InnerEnergy):
         super().__init__(measurement_model, regulariser, lam)
         self._optimiser_factory = optimiser_factory
 
-    def _build_loss_func_factory(self, optimiser: torch.optim.Optimizer) -> Optional[Callable]:
-        IMPLEMENT ME!
-
     def argmin(self, x: torch.Tensor, num_iterations: int=5) -> torch.Tensor:
         logging.info('[INNER] perform argmin to compute MAP estimate')
 
@@ -222,23 +219,20 @@ class UnrollingEnergy(InnerEnergy):
         optimiser, stopping, prox_map_factory = self._optimiser_factory([x_])
         if prox_map_factory is not None:
             setattr(x_, 'prox', prox_map_factory(x))
-
+            loss_func = lambda z: self.lam * self.regulariser(z)
+        else:
+            loss_func = lambda z: self(z)
         optimiser.zero_grad()
 
-        # TODO:
-        #   > loss_function factory is required similar to closure factory
-        #   > if use_prox, loss function needs to be adjusted!!
-
         t0 = time.time()
-        _ = optimiser.step_unroll(lambda z: self(z), num_iterations)
+        _, x_unrolled = optimiser.step_unroll(loss_func, num_iterations)
         t1 = time.time()
 
         logging.info('[INNER] computed MAP estimate')
         logging.info('[INNER]  > number of iterations: {:d}'.format(num_iterations))
         logging.info('[INNER]  > elapsed time [s]: {:.5f}'.format(t1 - t0))
 
+        return x_unrolled[0]
 
-
-
-
-        return x_
+    def sample(self, num_sampling_steps: int) -> torch.Tensor:
+        raise NotImplementedError('Sampling is not implemented.')
