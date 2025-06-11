@@ -49,7 +49,10 @@ bilevel:
   loss: 'L2Loss'
   optimiser:
     name: 'NAGOptimiser'              # same as for optimiser above
-    parameters: {beta: 0.71, lip_const_default: 10000000}
+    parameters: {beta: 0.71, lip_const: 10000000}
+    alternating: False                # if true, each of the parameters of the regulariser builds its own param_group; consequently
+                                      # ...
+                                      # note that this is not relevant for denoising!
   solver:
     name: 'CGSolver'                  # only 'GCSolver' is available
     parameters: {max_num_iterations: 500, abs_tol: 0.000001, rel_tol: 0.000001}

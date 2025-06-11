@@ -46,7 +46,7 @@ def denoise(config: Configuration):
     t0 = time.time()
     test_batch_denoised = energy.argmin(energy.measurement_model.obs_noisy)
     if type(energy).__name__ == UnrollingEnergy.__name__:
-        num_unrolling_cycles = 100
+        num_unrolling_cycles = 10
         for i in range(0, num_unrolling_cycles):
             test_batch_denoised = energy.argmin(test_batch_denoised)
     t1 = time.time()

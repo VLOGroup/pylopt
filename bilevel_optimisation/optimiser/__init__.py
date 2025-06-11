@@ -1,4 +1,5 @@
-from bilevel_optimisation.optimiser.NAGOptimiser import NAGOptimiser, UnrollingNAGOptimiser
+from bilevel_optimisation.optimiser.NAGOptimiser import NAGOptimiser
+from bilevel_optimisation.optimiser.UnrollingNAGOptimiser import UnrollingNAGOptimiser
 from bilevel_optimisation.optimiser.AlternatingNAGOptimiser import AlternatingNAGOptimiser
 from bilevel_optimisation.optimiser.StoppingCriterion import EarlyStopping, FixedIterationsStopping
 

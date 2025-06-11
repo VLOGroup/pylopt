@@ -106,12 +106,13 @@ this comes at the cost of increased computation time.
 #### Denoising using pretrained models
 
 - **Example I**
-  - Potential: Student-t 
-  - Filters: Pretrained filters from [[1]](#1) 
-  - Filter weights: Optimised using `StochasticBilevelOptimisation`.
+  - Filters: Pretrained filters from [[1]](#1)
+  - Potential: 
+    - Type: Student-t
+    - Weights: Optimised using `BilevelOptimisation`
+  - Inner energy: `OptimisationEnergy`
 
-  To run the script, first update the dataset configurations in `config_data/example_prediction_I`, 
-  then execute 
+  To run the script, execute
 
     ```
     python examples/scripts/denoising_predict.py --configs example_prediction_I 
@@ -119,22 +120,38 @@ this comes at the cost of increased computation time.
   
   Alternatively, run the Jupyter notebook `example_denoising_predict.ipynb`.
 
-  |                    Test triplet                     |                     Filter response                     |
-  |:---------------------------------------------------:|:-------------------------------------------------------:|
-  | ![](./images/results/prediction_I_test_triplet.jpg) | ![](./images/results/prediction_I_filter_responses.png) |
+  |                    Test triplet                    |                    Filter response                    |
+  |:--------------------------------------------------:|:-----------------------------------------------------:|
+  |  ![](images/results/prediction_I/test_triplet.jpg) | ![](images/results/prediction_I/filter_responses.png) |
 
-- **Example II** ...
+- **Example II** 
+  - Filters: Pretrained filters from [[1]](#1)
+  - Potential: 
+    - Type: Student-t
+    - Weights: Optimised using `BilevelOptimisation`
+  - Inner energy: `UnrollingEnergy`
+
+  To denoise images using the above configuration, execute
   
+    ```
+    python examples/scripts/denoising_predict.py --configs example_prediction_II 
+    ```
+
+  The unrolling scheme denoises in satisfactory manner - the results to not differ significantly from the 
+  results obtained using the configuration example_prediction_I. 
+
 #### Training of FoE models
 
 - **Example I**
-  - Potential: Student-t
   - Filters: 
     - Pretrained filters from [[1]](#1)
     - Non-trainable
-  - Filter weights:
-    - Uniform initialisation
-    - Trainable 
+  - Potential: 
+    - Type: Student-t
+    - Weights:
+      - Uniform initialisation
+      - Trainable 
+  - Inner energy: `OptimisationEnergy`
   - Optimiser:
     - Inner: AlternatingNAGOptimiser
     - Outer: NAGOptimiser
@@ -145,21 +162,23 @@ this comes at the cost of increased computation time.
     python examples/scripts/denoising_train.py --configs example_training_I 
     ```
 
-  |                    Training stats                    |                Potential weight stats                |                    Test triplet                    |
-  |:----------------------------------------------------:|:----------------------------------------------------:|:--------------------------------------------------:|
-  | ![](./images/results/training_I_training_stats.png) | ![](./images/results/training_I_student_t_stats.png) | ![](./images/results/training_I_test_triplets.jpg) |
+  |                   Training stats                   |                Potential weight stats                |                    Test triplet                    |
+  |:--------------------------------------------------:|:----------------------------------------------------:|:--------------------------------------------------:|
+  |  ![](images/results/training_I/training_stats.png) | ![](images/results/training_I/student_t_stats.png)   | ![](images/results/training_I/test_triplets.jpg)   |
 
   Note that already after very iterations, we obtain a notable denoising performance. The main 
   reason for this behaviour is the nearly optimal initialisation of the filters. 
 
 - **Example II**
-  - Potential: Student-t
   - Filters:
     - Pretrained filters from [[1]](#1)
     - Trainable
-  - Filter weights:
-    - Uniform initialisation
-    - Trainable
+  - Potential:
+    - Type: Student-t
+    - Weights: 
+      - Uniform initialisation
+      - Trainable    
+  - Inner energy: `OptimisationEnergy`
   - Optimiser:
     - Inner: NAGOptimiser
     - Outer: NAGOptimiser
@@ -173,19 +192,21 @@ this comes at the cost of increased computation time.
   The training results are consistent with the results obtained in Example I. Notably, although the filters 
   are trainable, their $l^{2}$-norm remains nearly constant throughout the training process:
 
-  |                    Training stats                    |                    Filter stats                    |               Student-t potential                |
-  |:----------------------------------------------------:|:--------------------------------------------------:|:------------------------------------------------:|
-  | ![](./images/results/training_II_training_stats.png) | ![](./images/results/training_II_filter_stats.png) | ![](./images/results/training_II_potentials.png) |
+  |                   Training stats                   |                   Filter stats                    |               Student-t potential                |
+  |:--------------------------------------------------:|:-------------------------------------------------:|:------------------------------------------------:|
+  | ![](images/results/training_II/training_stats.png) |  ![](images/results/training_II/filter_stats.png) | ![](images/results/training_II/potentials.png)   |
 
 - **Example III**
-  - Potential: Student-t
   - Filters:
     - 7x7 DCT filters
     - Trainable
-  - Filter weights:
-    - Uniform initialisation
-    - Trainable
- - Optimiser:
+  - Potential: 
+    - Type: Student-t
+    - Weights:
+      - Uniform initialisation
+      - Trainable
+  - Inner energy: `OptimisationEnergy`
+  - Optimiser:
     - Inner: NAGOptimiser
     - Outer: Adam
 
@@ -197,25 +218,54 @@ this comes at the cost of increased computation time.
   We obtain similar denoising results as before:
 
   
-  |                    Training stats                     |                    Filter stats                     |                 Potential weight stats                 |                Student-t potential                |
-  |:-----------------------------------------------------:|:---------------------------------------------------:|:------------------------------------------------------:|:-------------------------------------------------:|
-  | ![](./images/results/training_III_training_stats.png) | ![](./images/results/training_III_filter_stats.png) | ![](./images/results/training_III_student_t_stats.png) | ![](./images/results/training_III_potentials.png) |
+  |                    Training stats                    |                   Filter stats                    |                Potential weight stats                |                Student-t potential                |
+  |:----------------------------------------------------:|:-------------------------------------------------:|:----------------------------------------------------:|:-------------------------------------------------:|
+  |  ![](images/results/training_III/training_stats.png) | ![](images/results/training_III/filter_stats.png) | ![](images/results/training_III/student_t_stats.png) | ![](images/results/training_III/potentials.png)   |
 
 - **Example IV** 
-  - Potential: Student-t
   - Filters:
     - Uniform on [-1, 1]
     - Trainable
-  - Filter weights:
-    - Uniform initialisation
-    - Trainable
- - Optimiser:
+  - Potential: 
+    - Type: Student-t
+    - Weights:
+      - Uniform initialisation
+      - Trainable
+  - Inner energy: `OptimisationEnergy`
+  - Optimiser:
     - Inner: NAGOptimiser
     - Outer: Adam
 
   Results: ...
 
 - **Example V**
+  - Filters:
+    - Uniform on [-1, 1]
+    - Trainable
+  - Potential: 
+    - Type: Student-t
+    - Weights:
+      - Uniform initialisation
+      - Trainable
+  - Inner energy: `UnrollingEnergy`
+  - Optimiser:
+    - Inner: UnrollingNAGOptimiser
+    - Outer: NAGOptimiser
+
+  To train the Student-t potential weights with this configuration run   
+  ```
+  python examples/scripts/denoising_train.py --configs example_training_V
+  ```
+  
+  Using the unrolling scheme provided in `UnrollingNAGOptimiser` we obtain descent results:
+
+
+  |                   Training stats                    |                    Test triplet                    |
+  |:---------------------------------------------------:|:--------------------------------------------------:|
+  | ![](./images/results/training_V/training_stats.png) | ![](./images/results/training_V/test_triplets.jpg) |
+
+
+- **Example VI**
   - Potential: Gaussian mixture
   - Filters:
     - Pretrained filters from [[1]](#1)

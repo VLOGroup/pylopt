@@ -22,7 +22,7 @@ inner_energy:
   lam: 0.5
   optimiser:
     name: 'UnrollingNAGOptimiser'
-    parameters: {lip_const_default: 1024, alpha: 0.0001}
+    parameters: {lip_const: 1024}
     stopping:
       name: 'EarlyStopping'
       parameters: {max_num_iterations: 1000, rel_tol: 0.00001}
