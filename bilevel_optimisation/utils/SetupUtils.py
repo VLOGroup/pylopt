@@ -83,11 +83,15 @@ def set_up_image_filter(config: Configuration) -> ImageFilter:
     return image_filter
 
 def set_up_gaussian_mixture(config: Configuration, num_filters: int) -> GaussianMixture:
-    potential_file = config['regulariser']['potential']['parameters']['gaussian_mixture']['parameters'].get()
-    trainable = (
-        config['regulariser']['parameters']['gaussian_mixture']['initialisation']['parameters']['trainable'].get())
+    potential_file = config['regulariser']['potential']['parameters']['gaussian_mixture']['initialisation']['file'].get()
+    trainable = config['regulariser']['potential']['parameters']['gaussian_mixture']['trainable'].get()
 
     if potential_file:
+
+        # TODO
+        #   test me !!!
+        print('to be tested ...')
+
         model_data = torch.load(potential_file)
         initialisation_dict = model_data['initialisation_dict']
         num_gmms = initialisation_dict['num_potentials'].item()
@@ -126,8 +130,7 @@ def set_up_gaussian_mixture(config: Configuration, num_filters: int) -> Gaussian
 
 def set_up_student_t_potential(config: Configuration, num_filters: int) -> StudentT:
     potential_file = config['regulariser']['potential']['parameters']['student_t']['initialisation']['file'].get()
-    trainable = (
-        config['regulariser']['potential']['parameters']['student_t']['trainable'].get())
+    trainable = config['regulariser']['potential']['parameters']['student_t']['trainable'].get()
 
     if potential_file:
         model_data_dir_path = get_model_data_dir_path(config)

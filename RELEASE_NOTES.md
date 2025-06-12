@@ -14,10 +14,8 @@
 ### Features
 
 - Use CUDA kernel to speed up training and prediction with gmm potentials
-- Implement inner energy using unrolling scheme
 - Improved handling of proximal maps
-- Deal properly with param_groups in NAGOptimiser
-
+- Implement some rudimentary tests which ensure the basic functionality of the package (train/predict) 
 
 ## [3.0.0]
 

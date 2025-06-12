@@ -28,9 +28,11 @@ class GaussianMixture(Potential):
                                            requires_grad=False).to(device=self.centers.device)
 
         self.log_weights = torch.nn.Parameter(log_weights_spec.value, requires_grad=log_weights_spec.trainable)
+
         self.scale_param = torch.nn.Parameter(torch.rand(self.num_gmms) / 100,
                                               requires_grad=log_weights_spec.trainable)
         setattr(self.scale_param, 'proj', lambda z: torch.clamp(z, min=0.00001))
+
         self.gaussian_multiplier = torch.nn.Parameter(0.5 * torch.log(2 * torch.pi * self.variance),
                                                       requires_grad=False)
 
