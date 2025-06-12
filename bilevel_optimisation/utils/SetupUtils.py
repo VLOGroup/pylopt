@@ -5,6 +5,7 @@ from confuse import Configuration
 from scipy.fftpack import idct
 from typing import Iterator, Callable
 from importlib import resources
+from itertools import chain
 
 from bilevel_optimisation import optimiser
 from bilevel_optimisation import solver
@@ -197,11 +198,31 @@ def load_backward_mode(config: Configuration):
     else:
         raise ValueError('Unknown energy type - cannot assign differentiation mode.')
 
-def set_up_bilevel_problem(parameters: Iterator[torch.nn.Parameter], config: Configuration) -> Bilevel:
+def load_bilevel_optimiser(parameters: Iterator[torch.nn.Parameter], config: Configuration) -> torch.optim.Optimizer:
     optimiser_name = config['bilevel']['optimiser']['name'].get()
-    optimiser_params = config['bilevel']['optimiser']['parameters'].get()
     optimiser_cls = load_optimiser_class(optimiser_name, projected=True)
-    optimiser_ = optimiser_cls(parameters, **optimiser_params)
+
+    if config['bilevel']['optimiser']['parameters']['param_groups'].get():
+        param_groups = []
+        for group_params, group_configs \
+                in zip(parameters, config['bilevel']['optimiser']['parameters']['param_groups'].get()):
+            hyper_params = {k: v for k, v in group_configs.items() if k != 'params'}
+            param_groups.append({'params': group_params, **hyper_params})
+
+        optimiser_ = optimiser_cls(param_groups)
+    else:
+        optimiser_params = config['bilevel']['optimiser']['parameters'].get()
+
+        optimiser_ = optimiser_cls(parameters, **optimiser_params)
+
+    return optimiser_
+
+def set_up_bilevel_problem(filter_parameters: Iterator[torch.nn.Parameter],
+                           potential_parameters: Iterator[torch.nn.Parameter],
+                           config: Configuration) -> Bilevel:
+
+    parameters = chain(filter_parameters, potential_parameters)
+    optimiser_ = load_bilevel_optimiser(parameters, config)
 
     solver_name = config['bilevel']['solver']['name'].get()
     solver_params = config['bilevel']['solver']['parameters'].get()
@@ -209,8 +230,7 @@ def set_up_bilevel_problem(parameters: Iterator[torch.nn.Parameter], config: Con
 
     backward_mode = load_backward_mode(config)
 
-    return Bilevel(optimiser_,
-                   build_solver_factory(SolverSpec(solver_class=solver_cls, solver_params=solver_params)),
+    return Bilevel(optimiser_, build_solver_factory(SolverSpec(solver_class=solver_cls, solver_params=solver_params)),
                    backward_mode=backward_mode)
 
 def set_up_measurement_model(data: torch.Tensor, config: Configuration) -> MeasurementModel:

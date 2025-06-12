@@ -67,7 +67,8 @@ def train_bilevel(config: Configuration):
 
     regulariser = set_up_regulariser(config)
     regulariser = regulariser.to(device=device, dtype=dtype)
-    bilevel = set_up_bilevel_problem(regulariser.parameters(), config)
+    bilevel = set_up_bilevel_problem(regulariser.get_image_filter().parameters(),
+                                     regulariser.get_potential().parameters(), config)
     bilevel = bilevel.to(device=device, dtype=dtype)
 
     log_trainable_params_stats(regulariser, logging_module='train')

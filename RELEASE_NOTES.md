@@ -19,6 +19,25 @@
 - Deal properly with param_groups in NAGOptimiser
 
 
+## [3.0.0]
+
+### Breaking
+
+- Updated configuration scheme for Bilevel class
+
+### Features
+
+- Unrolling scheme to solve bilevel problems
+  - Implementation of `UnrollingEnergy`
+  - Implementation of `BilevelUnrolling`, which governs the gradient computation through UnrollingEnergy using autograd
+  - Implementation of `UnrollingNAGOptimiser`, which performs a predefined number of NAG steps per call of step_unroll()
+- Fusion of NAGOptimiser and AlternatingNAGOptimiser
+  - Manage alternating optimisation using parameter groups contained in the PyTorch framework
+  - Removed AlternatingNAGOptimiser from repo
+- Examples
+  - Added prediction and training configurations using unrolling scheme
+  - Incorporated resulting outcomes in README.md
+
 ## [2.0.0]
 
 ### Features

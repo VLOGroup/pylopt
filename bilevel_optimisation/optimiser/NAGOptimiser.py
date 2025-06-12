@@ -64,7 +64,7 @@ class NAGOptimiser(BaseNAGOptimiser):
 
         for k in range(0, self._max_num_bt_iterations):
             step_size = 1 / param_group['lip_const']
-            self._apply_gradient_step([p for p in param_group['params']], grads_orig, step_size)
+            self._apply_gradient_step([p for p in param_group['params'] if p.requires_grad], grads_orig, step_size)
 
             loss_new = closure()
             quadratic_approx = self._compute_quadratic_approximation([p.data for p in param_group['params']

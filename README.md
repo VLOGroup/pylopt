@@ -1,6 +1,6 @@
 # BilevelOptimisation
 
-StochasticBilevelOptimisation is PyTorch-based library for learning hyperparameters 
+BilevelOptimisation is a PyTorch-based library for learning hyperparameters 
 $\theta$ by means of solving the bilevel problem
 
 $$(P_{bilevel}) ~~~~~\inf_{\theta} F(u^{*}(\theta), u^{(0)}) ~~~ \text{s.t.}  
@@ -153,7 +153,7 @@ this comes at the cost of increased computation time.
       - Trainable 
   - Inner energy: `OptimisationEnergy`
   - Optimiser:
-    - Inner: AlternatingNAGOptimiser
+    - Inner: NAGOptimiser
     - Outer: NAGOptimiser
   
   To run the training script, execute   

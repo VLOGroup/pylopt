@@ -26,8 +26,17 @@ inner_energy:
 bilevel:
   loss: 'L2Loss'
   optimiser:
-    name: 'AlternatingNAGOptimiser'
-    parameters: {beta: 0.71, lip_const_default: 10000000}
+    name: 'NAGOptimiser'
+    parameters:
+      beta: 0.71
+      lip_const: 10000000
+      param_groups:
+        - params: 'potential'
+          beta: 0.71
+          lip_const: 10000000
+        - params: 'filters'
+          beta: 0.71
+          lip_const: 10000
 
 data:
   type: 'float32'
