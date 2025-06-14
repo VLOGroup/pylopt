@@ -1,4 +1,4 @@
-from typing import Callable, List, Any
+from typing import Callable, List, Any, Optional
 import torch
 from torch.autograd import Function
 from torch.autograd.function import FunctionCtx
@@ -32,19 +32,48 @@ class Bilevel(torch.nn.Module):
         :param solver_factory:
         :param backward_mode:
         """
-
         super().__init__()
 
         self._optimiser = optimiser
-        self._solver_factory = solver_factory
+        self._solver_factory = solver_factory if backward_mode == 'differentiation' else None
 
-        self._backward_mode = backward_mode
-        if self._backward_mode == 'differentiation':
-            self._gradient_func = BilevelDifferentiation
-        elif self._backward_mode == 'unrolling':
-            self._gradient_func = BilevelUnrolling
-        else:
-            raise NotImplementedError('There is no backward mode named {:s}'.format(self._backward_mode))
+        self._loss_func_factory = self._build_loss_func_factory(backward_mode)
+        self._closure_factory = self._build_closure_factory(self._loss_func_factory, optimiser)
+        # self._backward_mode = backward_mode
+        # if self._backward_mode == 'differentiation':
+        #     self._gradient_func = BilevelDifferentiation
+        # elif self._backward_mode == 'unrolling':
+        #     self._gradient_func = BilevelUnrolling
+        # else:
+        #     raise NotImplementedError('There is no backward mode named {:s}'.format(self._backward_mode))
+
+    @staticmethod
+    def _build_loss_func_factory(backward_mode: str) -> Callable:
+        def loss_func_factory(inner_energy: InnerEnergy, outer_loss: BaseLoss,
+                              solver: Optional[LinearSystemSolver]=None) -> Callable:
+            trainable_parameters = [p for p in inner_energy.parameters() if p.requires_grad]
+            if backward_mode == 'differentiation':
+                def loss_func() -> Any:
+                    return BilevelDifferentiation.apply(inner_energy, outer_loss, solver, *trainable_parameters)
+            else:
+                def loss_func() -> Any:
+                    return BilevelUnrolling.apply(inner_energy, outer_loss, *trainable_parameters)
+            return loss_func
+
+        return loss_func_factory
+
+    @staticmethod
+    def _build_closure_factory(loss_func_factory, optimiser):
+        def closure_factory(inner_energy: InnerEnergy, outer_loss: BaseLoss,
+                            solver: Optional[LinearSystemSolver]=None):
+            def closure() -> Any:
+                optimiser.zero_grad()
+                with torch.enable_grad():
+                    loss = loss_func_factory(inner_energy, outer_loss, solver)()
+                    loss.backward()
+                return loss
+            return closure
+        return closure_factory
 
     def forward(self, outer_loss: BaseLoss, inner_energy: InnerEnergy) -> torch.Tensor:
         """
@@ -56,23 +85,28 @@ class Bilevel(torch.nn.Module):
         logging.info('[BILEVEL] update parameter of regulariser')
 
         with torch.no_grad():
-            trainable_parameters = [p for p in inner_energy.parameters() if p.requires_grad]
-            solver = self._solver_factory()
+            # trainable_parameters = [p for p in inner_energy.parameters() if p.requires_grad]
+            # solver = self._solver_factory()
+            #
+            # def closure():
+            #     self._optimiser.zero_grad()
+            #     with torch.enable_grad():
+            #         loss = self._gradient_func.apply(inner_energy, outer_loss, solver, *trainable_parameters)
+            #         loss.backward()
+            #     return loss
 
-            def closure():
-                self._optimiser.zero_grad()
-                with torch.enable_grad():
-                    loss = self._gradient_func.apply(inner_energy, outer_loss, solver, *trainable_parameters)
-                    loss.backward()
-                return loss
+            solver = self._solver_factory() if self._solver_factory is not None else None
+            loss_func = self._loss_func_factory(inner_energy, outer_loss, solver)
+            # closure = self._closure_factory(inner_energy, outer_loss, solver)
 
             t0 = time.time()
             # NOTE
             #   > closure is called at this stage to populate gradients
             #   > this is redundant for optimisers which use the closure (i.e. all NAG-type optimisers);
             #       for optimisers like Adam, etc. this call is absolutely necessary!
-            _ = closure()
-            curr_loss = self._optimiser.step(closure)
+            # _ = closure()
+
+            curr_loss = self._optimiser.step_(loss_func)
             t1 = time.time()
 
             logging.info('[BILEVEL] performed update step')
@@ -165,14 +199,12 @@ class BilevelDifferentiation(Function):
         inner_energy = ctx.inner_energy
         outer_loss_func = ctx.loss_func
         solver = ctx.solver
-
         lagrange_multiplier = BilevelDifferentiation.compute_lagrange_multiplier(outer_loss_func, inner_energy,
                                                                                  x_denoised, solver)
         grad_params = inner_energy.hvp_mixed(x_denoised.detach(), lagrange_multiplier)
         inner_energy.zero_grad()
 
         return None, None, None, *grad_params
-
 
 class BilevelUnrolling(Function):
     """
@@ -181,7 +213,7 @@ class BilevelUnrolling(Function):
     """
     @staticmethod
     def forward(ctx: FunctionCtx, inner_energy: InnerEnergy,
-                loss_func: torch.nn.Module, solver: LinearSystemSolver, *params) -> torch.Tensor:
+                loss_func: torch.nn.Module, *params) -> torch.Tensor:
         x_noisy = inner_energy.measurement_model.obs_noisy
         x_denoised = inner_energy.argmin(x_noisy)
 
@@ -200,4 +232,4 @@ class BilevelUnrolling(Function):
         inner_energy = ctx.inner_energy
         inner_energy.zero_grad()
 
-        return None, None, None, *grad_params
+        return None, None, *grad_params

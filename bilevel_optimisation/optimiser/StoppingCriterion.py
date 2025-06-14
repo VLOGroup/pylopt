@@ -75,6 +75,7 @@ class EarlyStopping(StoppingCriterion):
 
         x_old = kwargs['x_old']
         x_curr = kwargs['x_curr']
-        bool_2 = (torch.linalg.norm(x_old - x_curr).detach().cpu().item() < self._rel_tol)
+        bool_2 = (torch.linalg.norm(x_old - x_curr).detach().cpu().item() /
+                  torch.linalg.norm(x_old).detach().cpu().item() < self._rel_tol)
 
         return bool_1 or bool_2

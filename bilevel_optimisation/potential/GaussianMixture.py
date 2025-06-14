@@ -29,7 +29,7 @@ class GaussianMixture(Potential):
 
         self.log_weights = torch.nn.Parameter(log_weights_spec.value, requires_grad=log_weights_spec.trainable)
 
-        self.scale_param = torch.nn.Parameter(torch.rand(self.num_gmms) / 100,
+        self.scale_param = torch.nn.Parameter(torch.rand(self.get_num_potentials()) / 100,
                                               requires_grad=log_weights_spec.trainable)
         setattr(self.scale_param, 'proj', lambda z: torch.clamp(z, min=0.00001))
 
@@ -40,7 +40,7 @@ class GaussianMixture(Potential):
         return self.log_weights.data
 
     def get_number_of_mixtures(self) -> int:
-        return self.num_gmms
+        return self.get_num_potentials()
 
     def get_single_mixture(self, j: int) -> GaussianMixtureModel:
         weights = torch.nn.functional.softmax(self.log_weights, dim=1)[j, :]
@@ -54,7 +54,10 @@ class GaussianMixture(Potential):
     def forward_negative_log(self, x: torch.Tensor) -> torch.Tensor:
         diff_sq = (self.scale_param.reshape(1, -1, 1, 1, 1) * x.unsqueeze(dim=2) -
                    self.centers.reshape(1, 1, -1, 1, 1)) ** 2
-        log_weights = torch.nn.functional.log_softmax(self.log_weights, dim=1).reshape(1, self.num_gmms,
+
+        # diff_sq = (x.unsqueeze(dim=2) - self.centers.reshape(1, 1, -1, 1, 1)) ** 2
+
+        log_weights = torch.nn.functional.log_softmax(self.log_weights, dim=1).reshape(1, self.get_num_potentials(),
                                                                                        self.num_components, 1, 1)
         log_probs = -0.5 * diff_sq / self.variance + log_weights - self.gaussian_multiplier
         neg_log_filter_gmm = -torch.logsumexp(log_probs, dim=2)

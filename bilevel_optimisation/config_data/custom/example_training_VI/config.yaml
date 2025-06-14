@@ -3,7 +3,7 @@ regulariser:
     name: 'GaussianMixture'
     parameters:
       gaussian_mixture:
-        num_components: 33
+        num_components: 11
         box_lower: -1.0
         box_upper: 1.0
         initialisation:
@@ -17,23 +17,23 @@ regulariser:
       multiplier: 255
 
 inner_energy:
-  type: 'UnrollingEnergy'
+  type: 'OptimisationEnergy'
   lam: 0.5
   optimiser:
-    name: 'UnrollingNAGOptimiser'
+    name: 'NAGOptimiser'
     use_prox: False
     parameters: {lip_const: 1000}
     stopping:
       name: 'FixedIterationsStopping'
-      parameters: {max_num_iterations: 10}
+      parameters: {max_num_iterations: 1000}
 
 bilevel:
   optimiser:
-    name: 'NAGOptimiser'
-    parameters: {beta: 0.71, lip_const: 100000}
+    name: 'Adam'
+    parameters: {lr: 0.0001}
 
 data:
-  type: 'float64'
+  type: 'float32'
   dataset:
     train:
       root_dir: '/home/florianthaler/Documents/data/image_data/BSDS300/images/train'

@@ -85,11 +85,12 @@ from bilevel_optimisation.energy.InnerEnergy import InnerEnergy
 train_image_dataset = ImageDataset(train_data_root_dir)
 
 potential = Potential()
-regulariser = FieldsOfExperts(potential, filters_spec, filter_weights_spec)
+image_filter = ImageFilter()
+regulariser = FieldsOfExperts(potential, image_filter)
 bilevel = Bilevel(L2Loss(), optimiser_class(regulariser.parameters()), solver_factory)
 
+train_loader = DataLoader(train_image_dataset, batch_size=batch_size)
 while not training_finished:
-  train_loader = DataLoader(train_image_dataset, batch_size=batch_size)
   for batch in train_loader:
     measurement_model = MeasurementModel(batch, forward_operator, noise_level)
     inner_energy = InnerEnergy(measurement_model, regulariser, lam, optimiser_factory)

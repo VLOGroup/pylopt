@@ -33,7 +33,7 @@ class FieldsOfExperts(torch.nn.Module):
     def get_potential(self) -> Potential:
         return self.potential
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x_conv = self.image_filter(x)
         neg_log_potential = self.potential.forward_negative_log(x_conv)
         return torch.einsum('bfhw->', neg_log_potential)

@@ -37,8 +37,9 @@ def visualise_intermediate_results(regulariser: FieldsOfExperts, device: torch.d
     potential = regulariser.get_potential()
     if type(potential).__name__ == 'GaussianMixture':
         potential_images_dir_path = os.path.join(path_to_data_dir, potential_image_subdir)
-
-        visualise_gmm_potential(potential, device, dtype, fig_dir_path=potential_images_dir_path,
+        if not os.path.exists(potential_images_dir_path):
+            os.makedirs(potential_images_dir_path, exist_ok=True)
+        visualise_gmm_potential(regulariser.get_potential(), device, dtype, fig_dir_path=potential_images_dir_path,
                                 file_name='potential_iter_{:d}.png'.format(curr_iter + 1))
 
     if type(potential).__name__ == 'StudentT':

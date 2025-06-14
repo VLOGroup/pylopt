@@ -73,7 +73,7 @@ class BaseNAGOptimiser(torch.optim.Optimizer):
 
     @staticmethod
     def _compute_quadratic_approximation(param_group_new: List[torch.nn.Parameter],
-                                         param_group: List[torch.nn.Parameter],
+                                         param_group: List[torch.Tensor],
                                          grad_group_list: List[torch.Tensor], loss: torch.Tensor,
                                          lip_const: float) -> torch.Tensor:
         """

@@ -63,6 +63,29 @@ class InnerEnergy(torch.nn.Module, ABC):
         """
         return self.measurement_model(x) + self.lam * self.regulariser(x)
 
+class OptimisationEnergy(InnerEnergy):
+    """
+    Inheritance from class InnerEnergy which solves the inner problem by means of MAP estimation.
+    The MAP is computed using an optimiser inheriting from torch.optim.Optimizer. Optimisers will be
+    retrieved from an optimiser factory, which takes as input the variables/parameters to be optimised
+    and returns an optimiser optimising exactly these variables.
+    """
+
+    def __init__(self, measurement_model: MeasurementModel, regulariser: torch.nn.Module, lam: float,
+                 optimiser_factory: Callable) -> None:
+        """
+        Initialisation of an object of class InnerEnergy
+
+        :param measurement_model: See base class
+        :param regulariser: See base class
+        :param lam: See base class
+        :param optimiser_factory: A callable which maps a set of tensors to an optimiser optimising
+            these variables/parameters. For example, the optimiser_factory may map the list [x] for a tensor
+            x to torch.optim.Adam([x], lr=1e-3).
+        """
+        super().__init__(measurement_model, regulariser, lam)
+        self._optimiser_factory = optimiser_factory
+
     def hvp_state(self, x: torch.Tensor, v: torch.Tensor) -> Optional[torch.Tensor]:
         """
         Returns the hessian matrix of the energy as a function of the state at the point x applied to v.
@@ -104,67 +127,71 @@ class InnerEnergy(torch.nn.Module, ABC):
                                         outputs=de_dx, grad_outputs=v)
         return list(d2e_mixed)
 
-class OptimisationEnergy(InnerEnergy):
-    """
-    Inheritance from class InnerEnergy which solves the inner problem by means of MAP estimation.
-    The MAP is computed using an optimiser inheriting from torch.optim.Optimizer. Optimisers will be
-    retrieved from an optimiser factory, which takes as input the variables/parameters to be optimised
-    and returns an optimiser optimising exactly these variables.
-    """
+    def _build_loss_func_factory(self) -> Callable:
+        def loss_func_factory(x: torch.Tensor) -> Callable:
+            if hasattr(x, 'prox'):
+                def loss_func() -> Any:
+                    return self.lam * self.regulariser(x)
+            else:
+                def loss_func() -> Any:
+                    return self(x)
+            return loss_func
+        return loss_func_factory
 
-    def __init__(self, measurement_model: MeasurementModel, regulariser: torch.nn.Module, lam: float,
-                 optimiser_factory: Callable) -> None:
+    @staticmethod
+    def _build_closure_factory(loss_func_factory: Callable, optimiser: torch.optim.Optimizer) -> Callable:
         """
-        Initialisation of an object of class InnerEnergy
+        Function which builds a closure-factory based on the optimiser used for image reconstruction.
 
-        :param measurement_model: See base class
-        :param regulariser: See base class
-        :param lam: See base class
-        :param optimiser_factory: A callable which maps a set of tensors to an optimiser optimising
-            these variables/parameters. For example, the optimiser_factory may map the list [x] for a tensor
-            x to torch.optim.Adam([x], lr=1e-3).
-        """
-        super().__init__(measurement_model, regulariser, lam)
-        self._optimiser_factory = optimiser_factory
+        Notes
+        -----
+        > According to [1], closures are functions which should clear gradients, compute the loss and return
+            the loss to the caller. For optimisers requiring evaluations of the loss function within step(), this
+            design pattern is not convenient. This is because forward and backward steps are performed by
+            such closures - even though in most of the cases no further computation of gradients is required.
+        > The implementation of NAGOptimiser in this package breaks with the abovementioned pattern. The closure is
+            assumed to perform only the forward step of the loss function - gradients will be computed using
+            autograd within step().
+        > Given loss_func_factory and optimiser, which provides the forward-routine of the loss function only,
+            one can define PyTorch closures simply via a closure factory of the kind
 
-    def _build_closure_factory(self, optimiser: torch.optim.Optimizer) -> Optional[Callable]:
-        """
-        Function which builds a closure-factory based on the optimiser to be used. NAG-type optimisers
-        need closure (full energy, or regulariser only if proximal gradient method is used) - many other
-        optimisers, such as SGD or Adam, do not need a closure function. In the latter cases, the closure-factory
-        returns None for every input tensor.
+                def closure_factory(x: torch.Tensor) -> Callable:
+                    def closure() -> Any:
+                        optimiser.zero_grad()
+                        with torch.enable_grad():
+                            loss = loss_func_factory(x)()
+                        loss.backward()
+                        return loss
+                    return closure
 
-        :param optimiser: Instance of PyTorch optimiser
-        :return: Callable representing the closure taking into account if proximal gradient approach is used.
+        > The decoupled implementation of  _build_loss_func_factory() and _build_closure_factory() allows, if needed,
+            to build PyTorch closures by simply extending the implementation of this function (see code snippet
+            in the previous point).
+
+        References
+        ----------
+        [1] https://docs.pytorch.org/docs/stable/optim.html
+
+
+        :param loss_func_factory: Callable which, given the optimisation parameter x, evaluates the corresponding
+            loss function at x
+        :param optimiser: Instance of class torch.optim.Optimizer
+        :return: Callable which, given the optimisation parameter x, returns an appropriate closure. Note, that
+            closures returned by this function to NOT follow PyTorch's design pattern.
         """
         if type(optimiser).__name__ in NAG_TYPE_OPTIMISER:
-            def closure_factory(x: torch.Tensor) -> Callable:
-                if hasattr(x, 'prox'):
-                    def closure() -> Any:
-                        optimiser.zero_grad()
-                        with torch.enable_grad():
-                            loss = self.lam * self.regulariser(x)
-                            loss.backward()
-                        return loss
-                else:
-                    def closure() -> Any:
-                        optimiser.zero_grad()
-                        with torch.enable_grad():
-                            loss = self(x)
-                            loss.backward()
-                        return loss
-                return closure
+            return loss_func_factory
         else:
             def closure_factory(x: torch.Tensor):
                 return None
-        return closure_factory
+            return closure_factory
 
     def argmin(self, x: torch.Tensor) -> torch.Tensor:
         """
         This function computes the MAP estimate using the optimiser specified by
         self._optimiser_factory.
 
-        :param x: See InnerEnergy
+        :param x: Tensor corresponding to the image to be reconstructed
         :return: MAP estimate in terms of a tensor
         """
         logging.info('[INNER] perform argmin to compute MAP estimate')
@@ -174,7 +201,8 @@ class OptimisationEnergy(InnerEnergy):
         optimiser, stopping, prox_map_factory = self._optimiser_factory([x_])
         if prox_map_factory is not None:
             setattr(x_, 'prox', prox_map_factory(x))
-        closure_factory = self._build_closure_factory(optimiser)
+        loss_func_factory = self._build_loss_func_factory()
+        closure_factory = self._build_closure_factory(loss_func_factory, optimiser)
 
         k = 0
         stop = False
@@ -183,7 +211,7 @@ class OptimisationEnergy(InnerEnergy):
             x_old = x_.detach().clone()
 
             closure = closure_factory(x_)
-            _ = optimiser.step(closure)
+            optimiser.step(closure)
 
             stop = stopping.stop_iteration(k + 1, x_old=x_old, x_curr=x_)
             if not stop:
@@ -207,11 +235,21 @@ class UnrollingEnergy(InnerEnergy):
     def __init__(self, measurement_model: MeasurementModel, regulariser: torch.nn.Module, lam: float,
                  optimiser_factory: Callable) -> None:
         super().__init__(measurement_model, regulariser, lam)
-
-        super().__init__(measurement_model, regulariser, lam)
         self._optimiser_factory = optimiser_factory
 
     def argmin(self, x: torch.Tensor, num_iterations: int=5) -> torch.Tensor:
+        """
+        Image reconstruction using an NAG-based unrolling scheme.
+
+        Notes
+        -----
+        > For the unrolling scheme only NAG-type update steps were considered.
+        >
+
+        :param x:
+        :param num_iterations:
+        :return:
+        """
         logging.info('[INNER] perform argmin to compute MAP estimate')
 
         x_ = x.detach().clone()

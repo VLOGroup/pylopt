@@ -108,13 +108,13 @@ def set_up_gaussian_mixture(config: Configuration, num_filters: int) -> Gaussian
         state_dict = model_data['state_dict']
         potential.load_state_dict(state_dict)
     else:
-        initialisation_type = (
-            config['regulariser']['potential']['parameters']['gaussian_mixture']['initialisation']['name'].get())
         num_components = (
             config['regulariser']['potential']['parameters']['gaussian_mixture']['num_components'].get())
         box_lower = config['regulariser']['potential']['parameters']['gaussian_mixture']['box_lower'].get()
         box_upper = config['regulariser']['potential']['parameters']['gaussian_mixture']['box_upper'].get()
 
+        initialisation_type = (
+            config['regulariser']['potential']['parameters']['gaussian_mixture']['initialisation']['name'].get())
         if initialisation_type == 'uniform':
             log_weights = torch.ones(num_filters, num_components)
 

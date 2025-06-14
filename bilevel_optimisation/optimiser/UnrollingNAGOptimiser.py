@@ -13,7 +13,7 @@ class UnrollingNAGOptimiser(BaseNAGOptimiser):
 
     @torch.no_grad()
     def step(self, closure: Callable) -> torch.Tensor:
-        raise NotImplementedError('step function is not implemented for unrolling-type optimisers')
+        raise NotImplementedError('Function step() is not implemented for unrolling-type optimisers')
 
     def _make_intermediate_step(self, param_group_flat: List[torch.nn.Parameter], beta: float) -> List[torch.nn.Parameter]:
         group_params_inter = []
@@ -48,32 +48,32 @@ class UnrollingNAGOptimiser(BaseNAGOptimiser):
             updated_param_list.append(p)
         return updated_param_list
 
+    @torch.no_grad()
     def _perform_backtracking(self, params_grouped: List[List[torch.nn.Parameter]],
                               grad_group_list: List[torch.Tensor], group_idx: int,
                               loss_func: Callable) -> List[torch.Tensor]:
-        with torch.no_grad():
-            params_grouped_ = [[p.detach().clone() for p in group] for group in params_grouped]
-            params_grouped_orig_flat = [p for group in params_grouped for p in group]
-            loss = loss_func(*params_grouped_orig_flat)
+        params_grouped_ = [[p.detach().clone() for p in group] for group in params_grouped]
+        params_grouped_orig_flat = [p for group in params_grouped for p in group]
+        loss = loss_func(*params_grouped_orig_flat)
 
-            for k in range(0, self._max_num_bt_iterations):
-                step_size = 1 / self.param_groups[group_idx]['lip_const']
+        for k in range(0, self._max_num_bt_iterations):
+            step_size = 1 / self.param_groups[group_idx]['lip_const']
 
-                params_grouped_[group_idx] = self._apply_gradient_step(params_grouped_[group_idx],
-                                                                       grad_group_list, step_size)
-                params_grouped_flat = [p for group in params_grouped_ for p in group]
+            params_grouped_[group_idx] = self._apply_gradient_step(params_grouped_[group_idx],
+                                                                   grad_group_list, step_size)
+            params_grouped_flat = [p for group in params_grouped_ for p in group]
 
-                loss_new = loss_func(*params_grouped_flat)
-                quadratic_approx = self._compute_quadratic_approximation(params_grouped_flat, params_grouped_orig_flat,
-                                                                         grad_group_list, loss,
-                                                                         self.param_groups[group_idx]['lip_const'])
+            loss_new = loss_func(*params_grouped_flat)
+            quadratic_approx = self._compute_quadratic_approximation(params_grouped_flat, params_grouped_orig_flat,
+                                                                     grad_group_list, loss,
+                                                                     self.param_groups[group_idx]['lip_const'])
 
-                if loss_new <= quadratic_approx:
-                    self.param_groups[group_idx]['lip_const'] *= 0.9
-                    break
-                else:
-                    self.param_groups[group_idx]['lip_const'] *= 2.0
-                    params_grouped_ = [[p.detach().clone() for p in group] for group in params_grouped]
+            if loss_new <= quadratic_approx:
+                self.param_groups[group_idx]['lip_const'] *= 0.9
+                break
+            else:
+                self.param_groups[group_idx]['lip_const'] *= 2.0
+                params_grouped_ = [[p.detach().clone() for p in group] for group in params_grouped]
 
         params_grouped[group_idx] = self._apply_gradient_step(params_grouped[group_idx],
                                                               grad_group_list, step_size)
