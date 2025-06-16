@@ -1,22 +1,32 @@
 import torch
+import time
 
-# TODO
-#   > extend timer class such that CUDA events are used iff CUDA is used
-#       for compuations. if not use time.time() ...
-
-class CUDATimer:
-    def __init__(self):
-        pass
+class Timer:
+    """
+    Class which is used to measure elapsed on CPU or GPU. Time is measured in unit [ms].
+    """
+    def __init__(self, device: torch.device) -> None:
+        self._device = device
+        self._delta_time = -1.0
 
     def __enter__(self):
-        self.start = torch.cuda.Event(enable_timing=True)
-        self.end = torch.cuda.Event(enable_timing=True)
-
-        self.start.record()
+        if self._device.type == 'cuda':
+            self._start = torch.cuda.Event(enable_timing=True)
+            self._end = torch.cuda.Event(enable_timing=True)
+            torch.cuda.synchronize()
+            self._start.record()
+        else:
+            self._time_start = time.time()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        self.end.record()
-        torch.cuda.synchronize()
+        if self._device.type == 'cuda':
+            self._end.record()
+            torch.cuda.synchronize()
+            self._delta_time = self._start.elapsed_time(self._end)
+        else:
+            self._delta_time = time.time() - self._time_start
+            self._delta_time *= 1000
 
-        self.delta_time = self.start.elapsed_time(self.end)
+    def time_delta(self) -> float:
+        return self._delta_time

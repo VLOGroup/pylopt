@@ -1,22 +1,23 @@
 import os
 import time
 import matplotlib.pyplot as plt
+import numpy as np
 from matplotlib import colormaps as cmaps
 import torch
 from torch.utils.data import DataLoader
 from confuse import Configuration
 import argparse
 
-from bilevel_optimisation.utils.ConfigUtils import load_app_config, parse_datatype
-
-from bilevel_optimisation.utils.DatasetUtils import collate_function
-from bilevel_optimisation.evaluation.Evaluation import compute_psnr
 from bilevel_optimisation.dataset.ImageDataset import TestImageDataset
 from bilevel_optimisation.energy.InnerEnergy import UnrollingEnergy
+from bilevel_optimisation.evaluation.Evaluation import compute_psnr
+from bilevel_optimisation.utils.ConfigUtils import load_app_config, parse_datatype
+from bilevel_optimisation.utils.DatasetUtils import collate_function
 from bilevel_optimisation.utils.LoggingUtils import setup_logger
 from bilevel_optimisation.utils.SeedingUtils import seed_random_number_generators
 from bilevel_optimisation.utils.SetupUtils import (set_up_regulariser, set_up_measurement_model,
                                                    set_up_inner_energy)
+from bilevel_optimisation.utils.TimerUtils import Timer
 from bilevel_optimisation.visualisation.Visualisation import visualise_filter_responses
 
 
@@ -25,7 +26,7 @@ def load_data_from_file(root_path: str, file_name: str) -> torch.Tensor:
     return torch.load(file_path)
 
 def denoise(config: Configuration):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    device = torch.device('cpu') # torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     dtype = parse_datatype(config)
 
     test_data_root_dir = config['data']['dataset']['test']['root_dir'].get()
@@ -43,18 +44,31 @@ def denoise(config: Configuration):
     energy = set_up_inner_energy(measurement_model_, regulariser, config)
     energy.to(device=device, dtype=dtype)
 
-    t0 = time.time()
-    test_batch_denoised = energy.argmin(energy.measurement_model.obs_noisy)
-    if type(energy).__name__ == UnrollingEnergy.__name__:
-        num_unrolling_cycles = 10
-        for i in range(0, num_unrolling_cycles):
-            test_batch_denoised = energy.argmin(test_batch_denoised)
-    t1 = time.time()
+    # ###
+    num_inferences = 1000
+    time_list = []
+    for _ in range(0, num_inferences):
+
+        with Timer(device=device) as t:
+            test_batch_denoised = energy.argmin(energy.measurement_model.obs_noisy)
+            if type(energy).__name__ == UnrollingEnergy.__name__:
+                num_unrolling_cycles = 10
+                for i in range(0, num_unrolling_cycles):
+                    test_batch_denoised = energy.argmin(test_batch_denoised)
+
+        time_list.append(t.time_delta())
+
+    print(np.mean(time_list))
+
+
+
+
+    # ###
 
     # visualise_filter_responses(regulariser, test_batch_denoised)
 
     print('denoising stats:')
-    print(' > elapsed time [s] = {:.5f}'.format(t1 - t0))
+    print(' > elapsed time [s] = {:.5f}'.format(t.time_delta()))
 
     u_clean_splits = torch.split(test_batch_, split_size_or_sections=1, dim=0)
     u_noisy_splits = torch.split(energy.measurement_model.obs_noisy, split_size_or_sections=1, dim=0)
