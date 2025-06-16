@@ -1,5 +1,4 @@
 import os
-import time
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib import colormaps as cmaps
@@ -45,7 +44,7 @@ def denoise(config: Configuration):
     energy.to(device=device, dtype=dtype)
 
     # ###
-    num_inferences = 1000
+    num_inferences = 10
     time_list = []
     for _ in range(0, num_inferences):
 
@@ -57,6 +56,10 @@ def denoise(config: Configuration):
                     test_batch_denoised = energy.argmin(test_batch_denoised)
 
         time_list.append(t.time_delta())
+
+    import pandas as pd
+    df = pd.DataFrame(time_list, columns=['Elapsed time [s]'])
+    df.to_csv('out.csv')
 
     print(np.mean(time_list))
 

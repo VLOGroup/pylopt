@@ -20,7 +20,7 @@ class StudentT(Potential):
         return self.weights.data
 
     def forward_negative_log(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.einsum('bfhw,f->bfhw', torch.log(1.0 + x ** 2), self.weights)
+        return torch.einsum('bfhw,f->', torch.log(1.0 + x ** 2), self.weights)
 
     def state_dict(self, *args, **kwargs) -> Dict[str, Any]:
         state = super().state_dict(*args, **kwargs)
