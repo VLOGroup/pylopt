@@ -44,25 +44,27 @@ def denoise(config: Configuration):
     energy.to(device=device, dtype=dtype)
 
     # ###
-    num_inferences = 10
-    time_list = []
-    for _ in range(0, num_inferences):
 
-        with Timer(device=device) as t:
-            test_batch_denoised = energy.argmin(energy.measurement_model.obs_noisy)
-            if type(energy).__name__ == UnrollingEnergy.__name__:
-                num_unrolling_cycles = 10
-                for i in range(0, num_unrolling_cycles):
-                    test_batch_denoised = energy.argmin(test_batch_denoised)
+    mean_denoising_times = []
 
-        time_list.append(t.time_delta())
+    num_repititions = 2
+    for _ in range(0, num_repititions):
+        num_inferences = 10
+        time_list = []
+        for _ in range(0, num_inferences):
 
-    import pandas as pd
-    df = pd.DataFrame(time_list, columns=['Elapsed time [s]'])
-    df.to_csv('out.csv')
+            with Timer(device=device) as t:
+                test_batch_denoised = energy.argmin(energy.measurement_model.obs_noisy)
+                if type(energy).__name__ == UnrollingEnergy.__name__:
+                    num_unrolling_cycles = 10
+                    for i in range(0, num_unrolling_cycles):
+                        test_batch_denoised = energy.argmin(test_batch_denoised)
 
-    print(np.mean(time_list))
+            time_list.append(t.time_delta())
+        mean_denoising_times.append(np.mean(time_list))
 
+    print(np.mean(mean_denoising_times))
+    print(np.std(mean_denoising_times))
 
 
 
@@ -70,38 +72,38 @@ def denoise(config: Configuration):
 
     # visualise_filter_responses(regulariser, test_batch_denoised)
 
-    print('denoising stats:')
-    print(' > elapsed time [s] = {:.5f}'.format(t.time_delta()))
-
-    u_clean_splits = torch.split(test_batch_, split_size_or_sections=1, dim=0)
-    u_noisy_splits = torch.split(energy.measurement_model.obs_noisy, split_size_or_sections=1, dim=0)
-    u_denoised_splits = torch.split(test_batch_denoised, split_size_or_sections=1, dim=0)
-    for idx, (item_clean, item_noisy, item_denoised) in (
-            enumerate(zip(u_clean_splits, u_noisy_splits, u_denoised_splits))):
-        psnr = compute_psnr(item_clean, item_denoised)
-        print(' > psnr [dB] = {:.5f}'.format(psnr.detach().cpu().item()))
-
-        fig = plt.figure()
-        ax_clean = fig.add_subplot(1, 3, 1)
-        ax_clean.imshow(item_clean.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
-        ax_clean.set_title('clean')
-        ax_clean.xaxis.set_visible(False)
-        ax_clean.yaxis.set_visible(False)
-
-        ax_noisy = fig.add_subplot(1, 3, 2)
-        ax_noisy.imshow(item_noisy.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
-        ax_noisy.set_title('noisy')
-        ax_noisy.xaxis.set_visible(False)
-        ax_noisy.yaxis.set_visible(False)
-
-        ax_denoised = fig.add_subplot(1, 3, 3)
-        ax_denoised.imshow(item_denoised.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
-        ax_denoised.set_title('denoised')
-        ax_denoised.xaxis.set_visible(False)
-        ax_denoised.yaxis.set_visible(False)
-
-        plt.show()
-        plt.close(fig)
+    # print('denoising stats:')
+    # print(' > elapsed time [s] = {:.5f}'.format(t.time_delta()))
+    #
+    # u_clean_splits = torch.split(test_batch_, split_size_or_sections=1, dim=0)
+    # u_noisy_splits = torch.split(energy.measurement_model.obs_noisy, split_size_or_sections=1, dim=0)
+    # u_denoised_splits = torch.split(test_batch_denoised, split_size_or_sections=1, dim=0)
+    # for idx, (item_clean, item_noisy, item_denoised) in (
+    #         enumerate(zip(u_clean_splits, u_noisy_splits, u_denoised_splits))):
+    #     psnr = compute_psnr(item_clean, item_denoised)
+    #     print(' > psnr [dB] = {:.5f}'.format(psnr.detach().cpu().item()))
+    #
+    #     fig = plt.figure()
+    #     ax_clean = fig.add_subplot(1, 3, 1)
+    #     ax_clean.imshow(item_clean.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
+    #     ax_clean.set_title('clean')
+    #     ax_clean.xaxis.set_visible(False)
+    #     ax_clean.yaxis.set_visible(False)
+    #
+    #     ax_noisy = fig.add_subplot(1, 3, 2)
+    #     ax_noisy.imshow(item_noisy.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
+    #     ax_noisy.set_title('noisy')
+    #     ax_noisy.xaxis.set_visible(False)
+    #     ax_noisy.yaxis.set_visible(False)
+    #
+    #     ax_denoised = fig.add_subplot(1, 3, 3)
+    #     ax_denoised.imshow(item_denoised.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
+    #     ax_denoised.set_title('denoised')
+    #     ax_denoised.xaxis.set_visible(False)
+    #     ax_denoised.yaxis.set_visible(False)
+    #
+    #     plt.show()
+    #     plt.close(fig)
 
 def main():
     seed_random_number_generators(123)
