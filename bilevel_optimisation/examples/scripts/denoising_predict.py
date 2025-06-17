@@ -45,28 +45,19 @@ def denoise(config: Configuration):
 
     # ###
 
-    mean_denoising_times = []
+    num_inferences = 10
+    time_list = []
+    for _ in range(0, num_inferences):
 
-    num_repititions = 2
-    for _ in range(0, num_repititions):
-        num_inferences = 10
-        time_list = []
-        for _ in range(0, num_inferences):
+        with Timer(device=device) as t:
+            test_batch_denoised = energy.argmin(energy.measurement_model.obs_noisy)
+            if type(energy).__name__ == UnrollingEnergy.__name__:
+                num_unrolling_cycles = 10
+                for i in range(0, num_unrolling_cycles):
+                    test_batch_denoised = energy.argmin(test_batch_denoised)
 
-            with Timer(device=device) as t:
-                test_batch_denoised = energy.argmin(energy.measurement_model.obs_noisy)
-                if type(energy).__name__ == UnrollingEnergy.__name__:
-                    num_unrolling_cycles = 10
-                    for i in range(0, num_unrolling_cycles):
-                        test_batch_denoised = energy.argmin(test_batch_denoised)
-
-            time_list.append(t.time_delta())
-        mean_denoising_times.append(np.mean(time_list))
-
-    print(np.mean(mean_denoising_times))
-    print(np.std(mean_denoising_times))
-
-
+        time_list.append(t.time_delta())
+    print(np.mean(time_list))
 
     # ###
 
