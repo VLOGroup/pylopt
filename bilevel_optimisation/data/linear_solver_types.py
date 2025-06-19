@@ -16,3 +16,4 @@ class SolverResult:
     solution: Optional[torch.Tensor]
     info: Dict[str, Any]
     stats: SolverStats
+

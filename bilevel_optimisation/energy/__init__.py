@@ -1,1 +1,1 @@
-from bilevel_optimisation.energy.InnerEnergy import OptimisationEnergy, UnrollingEnergy
+from bilevel_optimisation.energy.InnerEnergy import InnerEnergy, OptimisationEnergy, UnrollingEnergy

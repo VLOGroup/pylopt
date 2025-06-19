@@ -1,7 +1,8 @@
 from typing import Union, Iterable, Dict, Any, Callable, List
 import torch
 
-from bilevel_optimisation.optimiser.BaseNAGOptimiser import BaseNAGOptimiser
+from bilevel_optimisation.optimise.BaseNAGOptimiser import BaseNAGOptimiser
+from bilevel_optimisation.optimise.line_search import compute_quadratic_approximation
 
 class NAGOptimiser(BaseNAGOptimiser):
     """
@@ -13,14 +14,10 @@ class NAGOptimiser(BaseNAGOptimiser):
 
     To perform Nesterov updates using backtracking line search the loss function of the problem
     needs to be provided in terms of a callable. This allows to find step sizes providing
-    sufficient descent. The loss function is assumed to be provided as closure function - see [1]
-
-    References
-    ----------
-    [1] https://docs.pytorch.org/docs/stable/generated/torch.optim.Optimizer.step.html
+    sufficient descent.
 
     Notes
-    ----------
+    -----
         > The implementation allows to perform Nesterov accelerated proximal gradient descent. If parameters
             do have a callable attribute 'prox', this map is applied. The function must take a torch tensor and
             a float (the step size) as input; the result is returned as torch tensor.
@@ -40,7 +37,7 @@ class NAGOptimiser(BaseNAGOptimiser):
         super().__init__(params, alpha, beta, lip_const, max_num_bt_iterations)
 
     def _make_intermediate_step(self, param_group: Dict[str, Any]) -> None:
-        beta = self._momentum_param(param_group)
+        beta = self.compute_momentum_param(param_group)
         for p in [p_ for p_ in param_group['params'] if p_.requires_grad]:
             state = self.state[p]
             if 'history' not in state:
@@ -68,8 +65,8 @@ class NAGOptimiser(BaseNAGOptimiser):
             self._apply_gradient_step(param_group_flat, grad_group_list, step_size)
 
             loss_new = closure()
-            quadratic_approx = self._compute_quadratic_approximation(param_group_flat, params_orig,
-                                                                     grad_group_list, loss, lip_const)
+            quadratic_approx = compute_quadratic_approximation(param_group_flat, params_orig,
+                                                               grad_group_list, loss, lip_const)
             if loss_new <= quadratic_approx:
                 lip_const *= 0.9
                 break
@@ -81,39 +78,7 @@ class NAGOptimiser(BaseNAGOptimiser):
         return lip_const
 
     @torch.no_grad()
-    def step_(self, closure: Callable) -> torch.Tensor:
-        """
-        Function which performs update step.
-
-        Notes
-        -----
-        According to the PyTorch docs (see [1]) the purpose of the closure function is to recompute the loss or
-        reevaluate the model during an update step. Moreover, any closure function should clear the gradients,
-        compute the loss and return the loss.
-
-        References
-        ----------
-        [1] https://docs.pytorch.org/docs/stable/optim.html
-
-        :param closure: Loss function which is required for this optimisation procedure. The function must (!) include
-            the backward call of the loss function to accumulate gradients.
-        :return: Loss after update step is performed
-        """
-
-        for group in self.param_groups:
-            self._make_intermediate_step(group)
-
-            _ = closure()  # populate gradients
-            group_params_trainable = [p for p in group['params'] if p.requires_grad]
-            grad_list = [p.grad for p in group['params'] if p.requires_grad]
-            if group['alpha']:
-                self._apply_gradient_step(group_params_trainable, grad_list, group['alpha'])
-            else:
-                self._perform_backtracking(group_params_trainable, grad_list, group['lip_const'], closure)
-        return closure()
-
-    @torch.no_grad()
-    def step(self, closure: Callable) -> torch.Tensor:
+    def step(self, func: Callable, grad_func: Callable) -> torch.Tensor:
         """
         Function which performs the update step. The main difference to step(...) is in the closure function.
         This implementation requires the closure to be the loss function only - gradients are computed within the
@@ -126,14 +91,17 @@ class NAGOptimiser(BaseNAGOptimiser):
         for group in self.param_groups:
             self._make_intermediate_step(group)
 
-            with torch.enable_grad():
-                loss = closure()
+            # with torch.enable_grad():
+            #     loss = closure()
+            # group_params_trainable = [p for p in group['params'] if p.requires_grad]
+            # grad_list = list(torch.autograd.grad(outputs=loss, inputs=group_params_trainable))
             group_params_trainable = [p for p in group['params'] if p.requires_grad]
-            grad_list = list(torch.autograd.grad(outputs=loss, inputs=group_params_trainable))
+            grad_list = grad_func(group_params_trainable)
+
 
             if group['alpha']:
                 self._apply_gradient_step(group_params_trainable, grad_list, group['alpha'])
             else:
                 group['lip_const'] = self._perform_backtracking(group_params_trainable, grad_list,
                                                                  group['lip_const'], closure)
-        return closure()
+        return func(group_params_trainable)

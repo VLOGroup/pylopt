@@ -1,20 +1,18 @@
 import torch
 from typing import Union, Iterable, Dict, Any, List, Callable, Tuple
 
+from bilevel_optimisation.optimise.optimiser_utils import apply_projection, apply_prox_map
+from bilevel_optimisation.optimise.line_search import compute_quadratic_approximation
+from bilevel_optimisation.optimise.BaseNAGOptimiser import BaseNAGOptimiser
 from bilevel_optimisation.data.Constants import MAX_NUM_UNROLLING_ITER
-from bilevel_optimisation.optimiser.BaseNAGOptimiser import BaseNAGOptimiser
 
 class UnrollingNAGOptimiser(BaseNAGOptimiser):
-
     def __init__(self, params: Union[Iterable[torch.Tensor], Iterable[Dict[str, Any]]],
                  alpha: float = None, beta: float = None, lip_const: float = 10000000,
                  max_num_bt_iterations: int = 10) -> None:
         super().__init__(params, alpha, beta, lip_const, max_num_bt_iterations)
 
     @torch.no_grad()
-    def step(self, closure: Callable) -> torch.Tensor:
-        raise NotImplementedError('Function step() is not implemented for unrolling-type optimisers')
-
     def _make_intermediate_step(self, param_group_flat: List[torch.nn.Parameter], beta: float) -> List[torch.nn.Parameter]:
         group_params_inter = []
         for p in param_group_flat:
@@ -37,13 +35,14 @@ class UnrollingNAGOptimiser(BaseNAGOptimiser):
         grad_list = list(torch.autograd.grad(outputs=loss, inputs=params_grouped_flat, create_graph=True))
         return grad_list
 
+    @torch.no_grad()
     def _apply_gradient_step(self, param_group_flat: List[torch.nn.Parameter],
                               grad_group_list: List[torch.Tensor], step_size: float):
         updated_param_list = []
         for p, grad in zip(param_group_flat, grad_group_list):
             p = p - step_size * grad
-            self._apply_prox_map(p, step_size)
-            self._apply_projection(p)
+            apply_prox_map(p, step_size)
+            apply_projection(p)
 
             updated_param_list.append(p)
         return updated_param_list
@@ -64,9 +63,9 @@ class UnrollingNAGOptimiser(BaseNAGOptimiser):
             params_grouped_flat = [p for group in params_grouped_ for p in group]
 
             loss_new = loss_func(*params_grouped_flat)
-            quadratic_approx = self._compute_quadratic_approximation(params_grouped_flat, params_grouped_orig_flat,
-                                                                     grad_group_list, loss,
-                                                                     self.param_groups[group_idx]['lip_const'])
+            quadratic_approx = compute_quadratic_approximation(params_grouped_flat, params_grouped_orig_flat,
+                                                               grad_group_list, loss,
+                                                               self.param_groups[group_idx]['lip_const'])
 
             if loss_new <= quadratic_approx:
                 self.param_groups[group_idx]['lip_const'] *= 0.9
@@ -81,7 +80,7 @@ class UnrollingNAGOptimiser(BaseNAGOptimiser):
         return params_grouped[group_idx]
 
     @torch.enable_grad()
-    def step_unroll(self, loss_func: Callable, num_iterations: int) -> Tuple[torch.Tensor, List[torch.Tensor]]:
+    def step(self, loss_func: Callable, num_iterations: int) -> Tuple[torch.Tensor, List[torch.Tensor]]:
         params_grouped = [[p.detach().clone().requires_grad_(True) for p in group['params'] if p.requires_grad]
                            for group in self.param_groups]
 
@@ -93,7 +92,7 @@ class UnrollingNAGOptimiser(BaseNAGOptimiser):
             for group_idx, group in enumerate(self.param_groups):
                 group_size = len(params_grouped[group_idx])
 
-                beta = self._momentum_param(group)
+                beta = self.compute_momentum_param(group)
 
                 params_grouped[group_idx] = self._make_intermediate_step(params_grouped[group_idx], beta)
                 grad_list = self._compute_gradients(params_grouped, loss_func)

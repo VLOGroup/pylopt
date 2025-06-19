@@ -20,7 +20,7 @@ class MeasurementModel(torch.nn.Module):
         super().__init__()
         self.u_clean = torch.nn.Parameter(u_clean, requires_grad=False)
         self._operator = operator
-        self._noise_level = noise_level
+        self.noise_level = noise_level
 
     def obs_clean(self) -> torch.nn.Parameter:
         """
@@ -39,7 +39,7 @@ class MeasurementModel(torch.nn.Module):
         :return: torch.nn.Parameter
         """
         obs_clean = self._operator(self.u_clean)
-        return torch.nn.Parameter(obs_clean + self._noise_level * torch.randn_like(obs_clean), requires_grad=False)
+        return torch.nn.Parameter(obs_clean + self.noise_level * torch.randn_like(obs_clean), requires_grad=False)
 
     def _data_fidelity(self, u: torch.Tensor) -> torch.Tensor:
         """

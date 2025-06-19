@@ -5,7 +5,7 @@ import logging
 import time
 
 from bilevel_optimisation.measurement_model import MeasurementModel
-from bilevel_optimisation.optimiser import NAG_TYPE_OPTIMISER
+from bilevel_optimisation.optimise import NAG_TYPE_OPTIMISER
 
 class InnerEnergy(torch.nn.Module, ABC):
     """
@@ -62,6 +62,7 @@ class InnerEnergy(torch.nn.Module, ABC):
         :return: Tensor representing the energy at the input x
         """
         return self.measurement_model(x) + self.lam * self.regulariser(x)
+
 
 class OptimisationEnergy(InnerEnergy):
     """
@@ -209,6 +210,10 @@ class OptimisationEnergy(InnerEnergy):
         t0 = time.time()
         while not stop:
             x_old = x_.detach().clone()
+
+            # TODO
+            #   > do we want to use PyTorch optimisers here too?!?! if so, then the calls
+            #       optimiser.zero_grad(), loss = ..., loss.backward() are required.
 
             closure = closure_factory(x_)
             optimiser.step(closure)
