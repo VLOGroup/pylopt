@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Callable
 import torch
 
-from bilevel_optimisation.data.SolverData import SolverResult
+from bilevel_optimisation.data import SolverResult
 
 class LinearSystemSolver(ABC):
 

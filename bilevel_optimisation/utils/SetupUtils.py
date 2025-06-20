@@ -3,30 +3,21 @@ import numpy as np
 import torch
 from confuse import Configuration
 from scipy.fftpack import idct
-from typing import Iterator, Callable
+from typing import Iterator
 from importlib import resources
 from itertools import chain
 
-from bilevel_optimisation import optimiser
 from bilevel_optimisation import solver
 from bilevel_optimisation import losses
 from bilevel_optimisation import energy
 from bilevel_optimisation.bilevel.Bilevel import Bilevel
-from bilevel_optimisation.data.Constants import MAX_NUM_OPTIMISER_DEFAULT_ITER
-from bilevel_optimisation.data.OptimiserSpec import OptimiserSpec
 from bilevel_optimisation.data.ParamSpec import ParamSpec
-from bilevel_optimisation.data.SolverSpec import SolverSpec
 from bilevel_optimisation.energy import OptimisationEnergy, UnrollingEnergy
 from bilevel_optimisation.energy.InnerEnergy import InnerEnergy
-from bilevel_optimisation.factories.BuildFactory import build_solver_factory
-from bilevel_optimisation.factories.BuildFactory import build_optimiser_factory, build_prox_map_factory
 from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
 from bilevel_optimisation.filters.Filters import ImageFilter
-from bilevel_optimisation.optimiser import FixedIterationsStopping
-from bilevel_optimisation.optimiser.ProjectedOptimiser import create_projected_optimiser
-from bilevel_optimisation.optimiser import NAG_TYPE_OPTIMISER, UNROLLING_TYPE_OPTIMISER
 from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementModel
-from bilevel_optimisation.potential import GaussianMixture, StudentT, Potential
+from bilevel_optimisation.potential import GaussianMixture, StudentT, Potential, LinearSplinePotential
 
 def get_model_data_dir_path(config: Configuration) -> str:
     models_root_dir = config['data']['models']['root_dir'].get()
@@ -92,7 +83,8 @@ def set_up_gaussian_mixture(config: Configuration, num_filters: int) -> Gaussian
         #   test me !!!
         print('to be tested ...')
 
-        model_data = torch.load(potential_file)
+        model_data_dir_path = get_model_data_dir_path(config)
+        model_data = torch.load(os.path.join(model_data_dir_path, potential_file))
         initialisation_dict = model_data['initialisation_dict']
         num_gmms = initialisation_dict['num_potentials'].item()
         num_components = initialisation_dict['num_components'].item()
@@ -128,6 +120,57 @@ def set_up_gaussian_mixture(config: Configuration, num_filters: int) -> Gaussian
 
     return potential
 
+def set_up_linear_spline_potential(config: Configuration, num_filters: int) -> LinearSplinePotential:
+    potential_file = config['regulariser']['potential']['parameters']['linear_spline']['initialisation']['file'].get()
+    trainable = config['regulariser']['potential']['parameters']['linear_spline']['trainable'].get()
+
+    if potential_file:
+        model_data_dir_path = get_model_data_dir_path(config)
+        model_data = torch.load(os.path.join(model_data_dir_path, potential_file))
+
+        initialisation_dict = model_data['initialisation_dict']
+        num_potentials = initialisation_dict['num_potentials']
+        num_nodes = initialisation_dict['num_nodes']
+
+        dummy_params = torch.ones(num_potentials, num_nodes)
+        dummy_param_spec = ParamSpec(dummy_params, trainable=trainable)
+
+        potential = LinearSplinePotential(num_nodes=num_nodes,
+                                          box_lower=initialisation_dict['box_lower'],
+                                          box_upper=initialisation_dict['box_upper'],
+                                          param_spec=dummy_param_spec)
+
+        state_dict = model_data['state_dict']
+        potential.load_state_dict(state_dict)
+    else:
+        nodal_values = None
+        multiplier = (
+            config['regulariser']['potential']['parameters']['linear_spline']['initialisation']['multiplier'].get())
+
+        num_nodes = (
+            config['regulariser']['potential']['parameters']['linear_spline']['num_nodes'].get())
+        box_lower = config['regulariser']['potential']['parameters']['linear_spline']['box_lower'].get()
+        box_upper = config['regulariser']['potential']['parameters']['linear_spline']['box_upper'].get()
+
+        if config['regulariser']['potential']['parameters']['linear_spline']['initialisation'][
+            'name'].get() == 'uniform':
+            nodal_values = torch.ones(num_filters, num_nodes)
+            nodal_values[0] = 0
+            nodal_values[-1] = 0
+
+        if config['regulariser']['potential']['parameters']['linear_spline']['initialisation'][
+            'name'].get() == 'student_t':
+            nodal_values = 1 / (1 + torch.linspace(-1, 1, num_nodes) ** 2)
+            nodal_values = nodal_values.repeat(num_filters, 1)
+            nodal_values[0] = 0
+            nodal_values[-1] = 0
+
+        nodal_values_spec = ParamSpec(multiplier * nodal_values, trainable=trainable)
+        potential = LinearSplinePotential(num_nodes=num_nodes, box_lower=box_lower, box_upper=box_upper,
+                                          param_spec=nodal_values_spec)
+
+    return potential
+
 def set_up_student_t_potential(config: Configuration, num_filters: int) -> StudentT:
     potential_file = config['regulariser']['potential']['parameters']['student_t']['initialisation']['file'].get()
     trainable = config['regulariser']['potential']['parameters']['student_t']['trainable'].get()
@@ -146,6 +189,7 @@ def set_up_student_t_potential(config: Configuration, num_filters: int) -> Stude
         state_dict = model_data['state_dict']
         potential.load_state_dict(state_dict)
     else:
+        weights = None
         weight_multiplier = (
             config['regulariser']['potential']['parameters']['student_t']['initialisation']['multiplier'].get())
 
@@ -165,6 +209,8 @@ def set_up_potential(config: Configuration, num_filters: int) -> Potential:
     if potential_name == 'StudentT':
         potential = set_up_student_t_potential(config, num_filters)
 
+    if potential_name == 'LinearSpline':
+        potential = set_up_linear_spline_potential(config, num_filters)
     return potential
 
 def set_up_regulariser(config: Configuration) -> torch.nn.Module:
@@ -172,25 +218,6 @@ def set_up_regulariser(config: Configuration) -> torch.nn.Module:
     num_filters = image_filter.get_num_filters()
     potential = set_up_potential(config, num_filters)
     return FieldsOfExperts(potential, image_filter)
-
-def load_optimiser_class(optimiser_name: str, projected: bool=False) -> type[torch.optim.Optimizer]:
-    # TODO
-    #   > Optimisers from torch.optim do not apply projections, prox-maps, etc. by default.
-    #   > The implementations of NAGOptimiser, AlternatingNAGOptimiser on the other hand do.
-    #   > Wrapping optimisers from torch.optim appropriately one can ensure that
-    #       projections, etc. are applied.
-    #   > For the sake of consistency apply projections, prox-maps also for NAGOptimiser, AlternatingNAGOptimiser
-    #       by wrapping the corresponding classes.
-    if hasattr(optimiser, optimiser_name):
-        optimiser_cls = getattr(optimiser, optimiser_name)
-    elif hasattr(torch.optim, optimiser_name):
-        optimiser_cls = getattr(torch.optim, optimiser_name)
-        if projected:
-            optimiser_cls = create_projected_optimiser(optimiser_cls)
-    else:
-        raise ValueError('Cannot find optimiser {:s}'.format(optimiser_name))
-
-    return optimiser_cls
 
 def load_backward_mode(config: Configuration):
     energy_type = config['inner_energy']['type'].get()
@@ -255,48 +282,22 @@ def load_energy_class(config: Configuration) -> type[InnerEnergy]:
         raise ValueError('Cannot find energy {:s}'.format(energy_type))
     return energy_cls
 
-def load_optimiser_factory(config: Configuration) -> Callable:
-    optimiser_name = config['inner_energy']['optimiser']['name'].get()
-    optimiser_params = config['inner_energy']['optimiser']['parameters'].get()
-    optimiser_cls = load_optimiser_class(optimiser_name)
-
-    stopping_name = config['inner_energy']['optimiser']['stopping']['name'].get()
-    stopping_parameters = config['inner_energy']['optimiser']['stopping']['parameters'].get()
-
-    if hasattr(optimiser, stopping_name):
-        stopping_cls = getattr(optimiser, stopping_name)
-    else:
-        stopping_cls = FixedIterationsStopping(max_num_iterations=MAX_NUM_OPTIMISER_DEFAULT_ITER)
-
-    prox_map_factory = None
-    if config['inner_energy']['optimiser']['use_prox'].get() and optimiser_name in NAG_TYPE_OPTIMISER:
-        noise_level = config['measurement_model']['noise_level'].get()
-        prox_map = lambda x, y, tau: ((tau / noise_level) * y + x) / (1 + (tau / noise_level))
-        prox_map_factory = build_prox_map_factory(prox_map)
-
-    optimiser_spec = OptimiserSpec(optimiser_class=optimiser_cls, optimiser_params=optimiser_params,
-                                   stopping_class=stopping_cls, stopping_params=stopping_parameters,
-                                   prox_map_factory=prox_map_factory)
-    optimiser_factory = build_optimiser_factory(optimiser_spec)
-    return optimiser_factory
-
-def optimiser_is_compatible(energy_cls: type[InnerEnergy], config: Configuration) -> bool:
-    ret_val = True
-    if energy_cls.__name__ == UnrollingEnergy.__name__:
-        optimiser_name = config['inner_energy']['optimiser']['name'].get()
-        optimiser_cls = load_optimiser_class(optimiser_name)
-        ret_val = optimiser_cls.__name__ in UNROLLING_TYPE_OPTIMISER
-
-    return ret_val
+# def optimiser_is_compatible(energy_cls: type[InnerEnergy], config: Configuration) -> bool:
+#     ret_val = True
+#     if energy_cls.__name__ == UnrollingEnergy.__name__:
+#         optimiser_name = config['inner_energy']['optimiser']['name'].get()
+#         optimiser_cls = load_optimiser_class(optimiser_name)
+#         ret_val = optimiser_cls.__name__ in UNROLLING_TYPE_OPTIMISER
+#
+#     return ret_val
 
 def set_up_inner_energy(measurement_model, regulariser, config: Configuration) -> InnerEnergy:
     energy_cls = load_energy_class(config)
-    optimiser_factory = load_optimiser_factory(config)
 
     if not optimiser_is_compatible(energy_cls, config):
         raise ValueError('Chosen optimiser and chosen energy are not compatible')
 
     # load regularisation parameter
     lam = config['inner_energy']['lam'].get()
-    return energy_cls(measurement_model, regulariser, lam, optimiser_factory)
+    return energy_cls(measurement_model, regulariser, lam)
 

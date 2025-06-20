@@ -1,13 +1,50 @@
-from typing import Callable, List, Any, Optional
+from typing import Callable, Any, Optional, Dict
 import torch
 from torch.autograd import Function
 from torch.autograd.function import FunctionCtx
 import logging
 import time
 
+from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
 from bilevel_optimisation.losses import BaseLoss
-from bilevel_optimisation.energy.InnerEnergy import InnerEnergy
+from bilevel_optimisation.energy.InnerEnergy import Energy
+from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementModel
 from bilevel_optimisation.solver.CGSolver import LinearSystemSolver
+
+
+class BilevelOptimisation:
+
+    def __init__(self, forward_operator: torch.nn.Module, noise_level: float, method_lower: str, options_lower: Dict[str, Any]) -> None:
+        self.forward_operator = forward_operator
+        self.noise_level = noise_level
+
+        self.method_lower = method_lower
+        self.options_lower = options_lower
+
+
+
+
+    def learn(self, regulariser: FieldsOfExperts, lam: float, loss_func: Callable, dataset_train, dataset_test, method_upper, options_upper):
+        train_loader = DataLoader(dataset_train, batch_size=batch_size,
+                                  collate_fn=lambda x: collate_function(x, crop_size=crop_size))
+
+        test_loader = DataLoader(dataset_test, batch_size=len(dataset_test), shuffle=False,
+                                 collate_fn=lambda x: collate_function(x, crop_size=-1))
+
+        trainable_params = [p for p in regulariser.parameters() if p.requires_grad]
+        for k, batch in enumerate(train_loader):
+            with torch.no_grad():
+                batch_ = batch.to()
+
+                measurement_model = MeasurementModel(batch_, self.forward_operator, self.noise_level)
+                energy = Energy(measurement_model, regulariser, lam)
+
+                if ...:
+                    loss = OptimisationBackwardFunction.apply(energy, loss_func, cg_solver, *trainable_params)
+                else:
+                    loss = UnrollingBackwardFunction.apply(energy, loss_func, *trainable_params)
+
+
 
 class Bilevel(torch.nn.Module):
     """
@@ -39,13 +76,6 @@ class Bilevel(torch.nn.Module):
 
         self._loss_func_factory = self._build_loss_func_factory(backward_mode)
         self._closure_factory = self._build_closure_factory(self._loss_func_factory, optimiser)
-        # self._backward_mode = backward_mode
-        # if self._backward_mode == 'differentiation':
-        #     self._gradient_func = BilevelDifferentiation
-        # elif self._backward_mode == 'unrolling':
-        #     self._gradient_func = BilevelUnrolling
-        # else:
-        #     raise NotImplementedError('There is no backward mode named {:s}'.format(self._backward_mode))
 
     @staticmethod
     def _build_loss_func_factory(backward_mode: str) -> Callable:
@@ -106,14 +136,14 @@ class Bilevel(torch.nn.Module):
             #       for optimisers like Adam, etc. this call is absolutely necessary!
             # _ = closure()
 
-            curr_loss = self._optimiser.step_(loss_func)
+            curr_loss = self._optimiser.step(loss_func)
             t1 = time.time()
 
             logging.info('[BILEVEL] performed update step')
             logging.info('[BILEVEL]  > elapsed time [s]: {:.5f}'.format(t1 - t0))
         return curr_loss
 
-class BilevelDifferentiation(Function):
+class OptimisationBackwardFunction(Function):
     """
     Subclass of torch.autograd.Function. It implements the implicit differentiation scheme
     to compute the gradients of optimiser of the inner problem w.r.t. to the parameters
@@ -130,7 +160,7 @@ class BilevelDifferentiation(Function):
     """
 
     @staticmethod
-    def forward(ctx: FunctionCtx, inner_energy: InnerEnergy,
+    def forward(ctx: FunctionCtx, inner_energy: Energy,
                 loss_func: torch.nn.Module, solver: LinearSystemSolver, *params) -> torch.Tensor:
         """
         Function which needs to be implemented due to subclassing from torch.autograd.Function.
@@ -206,7 +236,7 @@ class BilevelDifferentiation(Function):
 
         return None, None, None, *grad_params
 
-class BilevelUnrolling(Function):
+class UnrollingBackwardFunction(Function):
     """
     Subclass of torch.autograd.Function with the purpose to provide a custom backward
     function based on an unrolling scheme.

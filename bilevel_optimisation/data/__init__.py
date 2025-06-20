@@ -1,2 +1,6 @@
 from bilevel_optimisation.data.bilevel_types import LowerProblemResult
 from bilevel_optimisation.data.optimiser_types import OptimiserResult
+
+from bilevel_optimisation.data.linear_solver_types import SolverResult, LinearSolverStats
+
+

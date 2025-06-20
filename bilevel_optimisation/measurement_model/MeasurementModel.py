@@ -51,7 +51,7 @@ class MeasurementModel(torch.nn.Module):
         :return: Scaled squared l2-norm in terms of a torch.Tensor.
         """
 
-        return 0.5 * torch.sum((u - self.obs_noisy) ** 2) / self._noise_level ** 2
+        return 0.5 * torch.sum((u - self.obs_noisy) ** 2) / self.noise_level ** 2
 
     def forward(self, u: torch.Tensor) -> torch.Tensor:
         """
