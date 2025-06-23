@@ -7,7 +7,7 @@ from bilevel_optimisation.data.ParamSpec import ParamSpec
 from bilevel_optimisation.potential.StudentT import StudentT
 from bilevel_optimisation.potential.GaussianMixture import GaussianMixture
 from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
-from bilevel_optimisation.projection.ParameterProjections import zero_mean_projection
+from bilevel_optimisation.filters.Filters import zero_mean_projection
 
 def dump_config_file(config: Configuration, path_to_data_dir: str):
     config_data = config.dump(full=True)

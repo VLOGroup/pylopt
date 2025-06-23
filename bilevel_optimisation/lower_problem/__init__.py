@@ -1,1 +1,1 @@
-from bilevel_optimisation.lower_problem.solve_lower import solve_lower
+from bilevel_optimisation.lower_problem.solve_lower import solve_lower, add_group_options

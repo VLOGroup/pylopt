@@ -9,7 +9,7 @@ import argparse
 from bilevel_optimisation.dataset.ImageDataset import TestImageDataset
 from bilevel_optimisation.evaluation.Evaluation import compute_psnr
 from bilevel_optimisation.utils.ConfigUtils import load_app_config, parse_datatype
-from bilevel_optimisation.utils.DatasetUtils import collate_function
+from bilevel_optimisation.utils.dataset_utils import collate_function
 from bilevel_optimisation.utils.LoggingUtils import setup_logger
 from bilevel_optimisation.utils.SeedingUtils import seed_random_number_generators
 from bilevel_optimisation.utils.SetupUtils import (set_up_regulariser, set_up_measurement_model,
@@ -42,32 +42,23 @@ def denoise(config: Configuration):
     energy.to(device=device, dtype=dtype)
 
 
+    options_adam = {'max_num_iterations': 1000, 'rel_tol': 1e-4}
+    options_nag = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.71]}
+    options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-5}
+    options_nag_unrolling = {'max_num_iterations': 1000, 'rel_tol': 1e-5}
 
-    # ############################
     with Timer(device=device) as t:
-        test_batch_denoised = solve_lower(energy.measurement_model.obs_noisy, inner_energy=energy, method='nag',
-                                          max_num_iterations=1000, lip_const=1024, rel_tol=1e-5)
+        lower_prob_result = solve_lower(energy.measurement_model.obs_noisy, inner_energy=energy,
+                                        method='adam', options=options_adam)
 
     print('denoising stats:')
-    print(' > elapsed time [s] = {:.5f}'.format(t.time_delta()))
-
-    # ############################
-    # ############################
-
-
-    #     test_batch_denoised = energy.argmin(energy.measurement_model.obs_noisy)
-    #     if type(energy).__name__ == UnrollingEnergy.__name__:
-    #         num_unrolling_cycles = 10
-    #         for i in range(0, num_unrolling_cycles):
-    #             test_batch_denoised = energy.argmin(test_batch_denoised)
-
-    # visualise_filter_responses(regulariser, test_batch_denoised)
-
-
+    print(' > elapsed time [ms] = {:.5f}'.format(t.time_delta()))
+    print(' > number of iterations = {:d}'.format(lower_prob_result.num_iterations))
+    print(' > cause of termination = {:s}'.format(lower_prob_result.message))
 
     u_clean_splits = torch.split(test_batch_, split_size_or_sections=1, dim=0)
     u_noisy_splits = torch.split(energy.measurement_model.obs_noisy, split_size_or_sections=1, dim=0)
-    u_denoised_splits = torch.split(test_batch_denoised, split_size_or_sections=1, dim=0)
+    u_denoised_splits = torch.split(lower_prob_result.solution, split_size_or_sections=1, dim=0)
     for idx, (item_clean, item_noisy, item_denoised) in (
             enumerate(zip(u_clean_splits, u_noisy_splits, u_denoised_splits))):
         psnr = compute_psnr(item_clean, item_denoised)

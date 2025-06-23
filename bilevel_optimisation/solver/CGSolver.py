@@ -11,7 +11,7 @@ def scalar_product_l2(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
 
 class CGSolver(LinearSystemSolver):
 
-    def __init__(self, max_num_iterations: int, abs_tol: float = 1e-5, rel_tol: float = 1e-5,
+    def __init__(self, max_num_iterations: int=500, abs_tol: float = 1e-5, rel_tol: float = 1e-5,
                  scalar_product: Callable = None) -> None:
         super().__init__()
 

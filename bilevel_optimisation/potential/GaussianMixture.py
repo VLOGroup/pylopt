@@ -55,8 +55,6 @@ class GaussianMixture(Potential):
         diff_sq = (self.scale_param.reshape(1, -1, 1, 1, 1) * x.unsqueeze(dim=2) -
                    self.centers.reshape(1, 1, -1, 1, 1)) ** 2
 
-        # diff_sq = (x.unsqueeze(dim=2) - self.centers.reshape(1, 1, -1, 1, 1)) ** 2
-
         log_weights = torch.nn.functional.log_softmax(self.log_weights, dim=1).reshape(1, self.get_num_potentials(),
                                                                                        self.num_components, 1, 1)
         log_probs = -0.5 * diff_sq / self.variance + log_weights - self.gaussian_multiplier

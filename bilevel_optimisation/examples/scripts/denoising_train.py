@@ -9,7 +9,7 @@ import argparse
 from bilevel_optimisation.dataset.ImageDataset import TestImageDataset, TrainingImageDataset
 from bilevel_optimisation.evaluation.Evaluation import evaluate_on_test_data
 from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
-from bilevel_optimisation.utils.DatasetUtils import collate_function
+from bilevel_optimisation.utils.dataset_utils import collate_function
 from bilevel_optimisation.utils.LoggingUtils import (setup_logger, log_trainable_params_stats,
                                                      log_gradient_norms)
 from bilevel_optimisation.utils.SeedingUtils import seed_random_number_generators
@@ -22,6 +22,8 @@ from bilevel_optimisation.visualisation.Visualisation import (visualise_training
                                                               visualise_filters, visualise_gmm_potential,
                                                               visualise_student_t_training_stats,
                                                               visualise_student_t_potential)
+
+from bilevel_optimisation.bilevel.Bilevel import BilevelOptimisation
 
 def visualise_intermediate_results(regulariser: FieldsOfExperts, device: torch.device, dtype: torch.dtype,
                                    curr_iter: int, path_to_data_dir: str, filter_image_subdir: str = 'filters',
@@ -49,8 +51,31 @@ def visualise_intermediate_results(regulariser: FieldsOfExperts, device: torch.d
         visualise_student_t_potential(regulariser.get_potential(), device, dtype, potential_images_dir_path,
                                       file_name='potential_iter_{:d}.png'.format(curr_iter + 1))
 
+def bilevel_learn(config: Configuration):
+    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+    dtype = parse_datatype(config)
 
-def train_bilevel(config: Configuration):
+    train_data_root_dir = config['data']['dataset']['train']['root_dir'].get()
+    train_image_dataset = TrainingImageDataset(root_path=train_data_root_dir, dtype=dtype)
+
+    test_data_root_dir = config['data']['dataset']['test']['root_dir'].get()
+    test_image_dataset = TestImageDataset(root_path=test_data_root_dir, dtype=dtype)
+
+    regulariser = set_up_regulariser(config)
+    regulariser = regulariser.to(device=device, dtype=dtype)
+
+    method_lower = 'nag'
+    options_lower = {'max_num_iterations': 1000, 'rel_tol': 1e-5}
+
+    bilevel_optimisation = BilevelOptimisation(torch.nn.Identity(), noise_level=0.1, method_lower=method_lower,
+                                               options_lower=options_lower)
+    lam = 0.5
+    func = lambda x, y: 0.5 * torch.sum((x - y) ** 2)
+    bilevel_optimisation.learn(regulariser, lam, func, train_image_dataset, test_image_dataset,
+                               optimisation_method_upper='nag', optimisation_options_upper={'max_num_iterations': 10})
+
+
+def train_bilevel_(config: Configuration):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     dtype = parse_datatype(config)
 
@@ -162,7 +187,8 @@ def main():
     configuring_module = '[DENOISING] train'
     config = load_app_config(app_name, args.configs, configuring_module)
 
-    train_bilevel(config)
+    # train_bilevel(config)
+    bilevel_learn(config)
 
 if __name__ == '__main__':
     main()

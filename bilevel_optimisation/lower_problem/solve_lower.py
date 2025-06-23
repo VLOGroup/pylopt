@@ -47,10 +47,14 @@ def assemble_param_groups_adam(u: torch.Tensor, lr: List[Optional[float]]=None,
                                batch_optimisation: bool=True, **unknown_options) -> List[Dict[str, Any]]:
     param_groups = assemble_param_groups_base(u, batch_optimisation)
 
-    lr = [None for _ in range(u.shape[0])] if not lr else lr
-    betas = [None for _ in range(u.shape[0])] if not betas else betas
-    eps = [None for _ in range(u.shape[0])] if not eps else eps
-    weight_decay = [None for _ in range(u.shape[0])] if not weight_decay else weight_decay
+    # TODO:
+    #   > test me!!
+    #   > does this work as expected? any inference with harmonise_param_groups?!?
+
+    lr = [None for _ in range(0, len(param_groups))] if not lr else lr
+    betas = [None for _ in range(0, len(param_groups))] if not betas else betas
+    eps = [None for _ in range(0, len(param_groups))] if not eps else eps
+    weight_decay = [None for _ in range(0, len(param_groups))] if not weight_decay else weight_decay
     add_group_options(param_groups, {'lr': lr, 'betas': betas, 'eps': eps, 'weight_decay': weight_decay})
 
     return param_groups
@@ -72,7 +76,12 @@ def solve_lower(u_noisy: torch.Tensor, inner_energy: Energy, method: str,
 
     u_ = u_noisy.detach().clone()
     if method == 'nag':
+
+        # TODO
+        #   func, grad_func as function of param_groups?!?!
+
         func = lambda x: inner_energy(x)
+
         def grad_func(x):
             with torch.enable_grad():
                 loss = func(x)

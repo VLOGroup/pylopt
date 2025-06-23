@@ -12,8 +12,8 @@ from bilevel_optimisation import losses
 from bilevel_optimisation import energy
 from bilevel_optimisation.bilevel.Bilevel import Bilevel
 from bilevel_optimisation.data.ParamSpec import ParamSpec
-from bilevel_optimisation.energy import OptimisationEnergy, UnrollingEnergy
-from bilevel_optimisation.energy.InnerEnergy import InnerEnergy
+# from bilevel_optimisation.energy import OptimisationEnergy, UnrollingEnergy
+from bilevel_optimisation.energy.Energy import Energy
 from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
 from bilevel_optimisation.filters.Filters import ImageFilter
 from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementModel
@@ -274,13 +274,13 @@ def set_up_outer_loss(data: torch.Tensor, config: Configuration):
     loss_cls = getattr(losses, loss_name)
     return loss_cls(data)
 
-def load_energy_class(config: Configuration) -> type[InnerEnergy]:
-    energy_type = config['inner_energy']['type'].get()
-    if hasattr(energy, energy_type):
-        energy_cls = getattr(energy, energy_type)
-    else:
-        raise ValueError('Cannot find energy {:s}'.format(energy_type))
-    return energy_cls
+# def load_energy_class(config: Configuration) -> type[InnerEnergy]:
+#     energy_type = config['inner_energy']['type'].get()
+#     if hasattr(energy, energy_type):
+#         energy_cls = getattr(energy, energy_type)
+#     else:
+#         raise ValueError('Cannot find energy {:s}'.format(energy_type))
+#     return energy_cls
 
 # def optimiser_is_compatible(energy_cls: type[InnerEnergy], config: Configuration) -> bool:
 #     ret_val = True
@@ -291,13 +291,13 @@ def load_energy_class(config: Configuration) -> type[InnerEnergy]:
 #
 #     return ret_val
 
-def set_up_inner_energy(measurement_model, regulariser, config: Configuration) -> InnerEnergy:
-    energy_cls = load_energy_class(config)
-
-    if not optimiser_is_compatible(energy_cls, config):
-        raise ValueError('Chosen optimiser and chosen energy are not compatible')
+def set_up_inner_energy(measurement_model, regulariser, config: Configuration) -> Energy:
+    # energy_cls = load_energy_class(config)
+    #
+    # if not optimiser_is_compatible(energy_cls, config):
+    #     raise ValueError('Chosen optimiser and chosen energy are not compatible')
 
     # load regularisation parameter
     lam = config['inner_energy']['lam'].get()
-    return energy_cls(measurement_model, regulariser, lam)
+    return Energy(measurement_model, regulariser, lam)
 

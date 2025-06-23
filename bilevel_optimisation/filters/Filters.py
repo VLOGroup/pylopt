@@ -2,7 +2,9 @@ import torch
 from typing import Dict, Any, Mapping, NamedTuple
 
 from bilevel_optimisation.data.ParamSpec import ParamSpec
-from bilevel_optimisation.projection.ParameterProjections import zero_mean_projection
+
+def zero_mean_projection(x: torch.Tensor) -> torch.Tensor:
+    return x - torch.mean(x, dim=(-2, -1), keepdim=True)
 
 class ImageFilter(torch.nn.Module):
     def __init__(self, filter_spec: ParamSpec) -> None:
