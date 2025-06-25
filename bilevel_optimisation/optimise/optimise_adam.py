@@ -4,7 +4,7 @@ from typing import Dict, List, Callable, Any
 from bilevel_optimisation.data import OptimiserResult
 from bilevel_optimisation.optimise.optimise_nag import flatten_groups, compute_relative_error
 
-DEFAULTS = {'proj': None}
+DEFAULTS = {'proj': None, 'eps': 1e-8}
 
 def create_projected_optimiser(base_optimiser: type[torch.optim.Optimizer]) -> type[torch.optim.Optimizer]:
 
@@ -53,8 +53,6 @@ def step_adam(optimiser: torch.optim.Optimizer, func: Callable, param_groups: Li
         loss = func(*params_flat)
     loss.backward()
     optimiser.step()
-
-    print(compute_relative_error(param_groups))
 
     return loss
 

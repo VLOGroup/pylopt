@@ -17,20 +17,21 @@ def dump_config_file(config: Configuration, path_to_data_dir: str):
         file.write(str(config_data))
 
 def create_evaluation_dir(config: Configuration) -> str:
-    package_root_path = Path(__file__).resolve().parents[2]
-    export_path = os.path.join(package_root_path, 'data', 'evaluation')
-    os.makedirs(export_path, exist_ok=True)
+    experiments_root_dir = config['data']['experiments']['root_dir'].get()
+    if not experiments_root_dir:
+        package_root_path = Path(__file__).resolve().parents[2]
+        experiments_root_dir = os.path.join(package_root_path, 'data', 'evaluation')
+        os.makedirs(experiments_root_dir, exist_ok=True)
 
-    experiment_list = sorted(os.listdir(export_path))
+    experiment_list = sorted(os.listdir(experiments_root_dir))
     if experiment_list:
         experiment_id = str(int(experiment_list[-1]) + 1).zfill(5)
     else:
         experiment_id = str(0).zfill(5)
-    path_to_eval_dir = os.path.join(export_path, experiment_id)
+    path_to_eval_dir = os.path.join(experiments_root_dir, experiment_id)
     os.makedirs(path_to_eval_dir, exist_ok=True)
 
     dump_config_file(config, path_to_eval_dir)
-
     return path_to_eval_dir
 
 def save_foe_model(model: FieldsOfExperts, path_to_data_dir: str, model_dir_name: str='models') -> None:

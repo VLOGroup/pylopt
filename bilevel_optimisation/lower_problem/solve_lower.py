@@ -1,5 +1,5 @@
 import torch
-from typing import Optional, List, Dict, Any, Tuple
+from typing import Optional, List, Dict, Any, Tuple, Callable
 
 from bilevel_optimisation.data import LowerProblemResult, OptimiserResult
 from bilevel_optimisation.energy import Energy
@@ -42,7 +42,7 @@ def assemble_param_groups_nag(u: torch.Tensor, alpha: List[Optional[float]]=None
     return param_groups
 
 def assemble_param_groups_adam(u: torch.Tensor, lr: List[Optional[float]]=None,
-                               betas: List[Optional[Tuple[float, float]]]=None, eps: List[Optional[float]]=None,
+                               betas: List[Optional[Tuple[float, float]]]=None,
                                weight_decay: List[Optional[float]]=None,
                                batch_optimisation: bool=True, **unknown_options) -> List[Dict[str, Any]]:
     param_groups = assemble_param_groups_base(u, batch_optimisation)
@@ -53,9 +53,8 @@ def assemble_param_groups_adam(u: torch.Tensor, lr: List[Optional[float]]=None,
 
     lr = [None for _ in range(0, len(param_groups))] if not lr else lr
     betas = [None for _ in range(0, len(param_groups))] if not betas else betas
-    eps = [None for _ in range(0, len(param_groups))] if not eps else eps
     weight_decay = [None for _ in range(0, len(param_groups))] if not weight_decay else weight_decay
-    add_group_options(param_groups, {'lr': lr, 'betas': betas, 'eps': eps, 'weight_decay': weight_decay})
+    add_group_options(param_groups, {'lr': lr, 'betas': betas, 'weight_decay': weight_decay})
 
     return param_groups
 
@@ -68,61 +67,94 @@ def parse_result(result: OptimiserResult, max_num_iterations: int, **unknown_opt
     return lower_prob_result
 
 def build_solution_tensor_from_param_groups(param_groups: List[Dict[str, Any]]):
-    solution_list = [group['params'][-1].data for group in param_groups]
+    solution_list = [group['params'][-1] for group in param_groups]
     return torch.cat(solution_list, dim=0)
 
-def solve_lower(u_noisy: torch.Tensor, inner_energy: Energy, method: str,
-                options: Dict[str, Any]) -> LowerProblemResult:
+def build_objective_func(energy: Energy, batch_optim: bool, use_prox: bool) -> Callable:
+    if batch_optim and not use_prox:
+        def func(x: torch.Tensor) -> torch.Tensor:
+            return energy(x)
+    elif batch_optim and use_prox:
+        def func(x: torch.Tensor) -> torch.Tensor:
+            return energy.lam * energy.regulariser(x)
+    elif not batch_optim and not use_prox:
+        def func(*x: torch.Tensor) -> torch.Tensor:
+            return energy(torch.cat(x, dim=0))
+    else:
+        def func(*x: torch.Tensor) -> torch.Tensor:
+            return energy.lam * energy.regulariser(torch.cat(x, dim=0))
+    return func
 
-    u_ = u_noisy.detach().clone()
-    if method == 'nag':
-
-        # TODO
-        #   func, grad_func as function of param_groups?!?!
-
-        func = lambda x: inner_energy(x)
-
-        def grad_func(x):
+def build_gradient_func(func: Callable, batch_optim: bool) -> Callable:
+    if batch_optim:
+        def grad_func(x: torch.Tensor) -> List[torch.Tensor]:
             with torch.enable_grad():
+                x.requires_grad_(True)
                 loss = func(x)
             return list(torch.autograd.grad(outputs=loss, inputs=[x]))
+    else:
+        def grad_func(*x: torch.Tensor) -> List[torch.Tensor]:
+            x_ = torch.cat(x, dim=0)
+            with torch.enable_grad():
+                x_.requires_grad_(True)
+                loss = func(x_)
+            grads = torch.autograd.grad(outputs=loss, inputs=[x_])[0]
+            return list(torch.split(grads, split_size_or_sections=1, dim=0))
+    return grad_func
+
+def solve_lower(energy: Energy, method: str,
+                options: Dict[str, Any], noisy_obs: Optional[torch.Tensor]=None) -> LowerProblemResult:
+    noisy_obs = noisy_obs if noisy_obs else energy.measurement_model.obs_noisy
+    u_ = noisy_obs.detach().clone()
+    u_.requires_grad = True
+
+    batch_optim = options.get('batch_optimisation', True)
+
+    if method == 'nag':
+        func = build_objective_func(energy, batch_optim=batch_optim, use_prox=False)
+        grad_func = build_gradient_func(func, batch_optim=batch_optim)
         param_groups = assemble_param_groups_nag(u_, **options)
 
         nag_result = optimise_nag(func, grad_func, param_groups, **options)
         lower_prob_result = parse_result(nag_result, **options)
     elif method == 'napg':
+        func = build_objective_func(energy, batch_optim=batch_optim, use_prox=True)
+        grad_func = build_gradient_func(func, batch_optim=batch_optim)
         param_groups = assemble_param_groups_nag(u_, **options)
-        add_prox(param_groups, u_noisy, inner_energy)
-
-        func = lambda x: inner_energy.lam * inner_energy.regulariser(x)
-        def grad_func(x):
-            with torch.enable_grad():
-                loss = func(x)
-            return list(torch.autograd.grad(outputs=loss, inputs=[x]))
+        add_prox(param_groups, u_, energy)
 
         nag_result = optimise_nag(func, grad_func, param_groups, **options)
         lower_prob_result = parse_result(nag_result, **options)
     elif method == 'adam':
+
+        go on here: batch optim und so ...
+
+
         param_groups = assemble_param_groups_adam(u_, **options)
 
-        func = lambda x: inner_energy(x)
+        func = lambda x: energy(x)
         adam_result = optimise_adam(func, param_groups, **options)
         lower_prob_result = parse_result(adam_result, **options)
     elif method == 'nag_unrolling':
-        func = lambda x: inner_energy(x)
+        func = lambda x: energy(x)
         def grad_func(x):
-            with torch.enable_grad():
-                loss = func(x)
-            return list(torch.autograd.grad(outputs=loss, inputs=[x]))
+            loss = func(x)
+            return list(torch.autograd.grad(outputs=loss, inputs=[x], create_graph=True))
         param_groups = assemble_param_groups_nag(u_, **options)
 
-        nag_result = optimise_nag_unrolling(func, grad_func, param_groups, **options)
-        lower_prob_result = parse_result(nag_result, **options)
+        # nag_result = optimise_nag_unrolling(energy, grad_func, param_groups, **options)
+        # lower_prob_result = parse_result(nag_result, **options)
+        # lower_prob_result = LowerProblemResult(nag_result.solution[0], -1, -1)
+
+        from bilevel_optimisation.optimise.optimise_nag import unroll
+        res = unroll(func, param_groups)
+        lower_prob_result = parse_result(res, **options)
+        return lower_prob_result # LowerProblemResult(res.solution[0][0], -1, -1)
     elif method == 'napg_unrolling':
         param_groups = assemble_param_groups_nag(u_, **options)
-        add_prox(param_groups, u_noisy, inner_energy)
+        add_prox(param_groups, u_, energy)
 
-        func = lambda x: inner_energy.lam * inner_energy.regulariser(x)
+        func = lambda x: energy.lam * energy.regulariser(x)
         def grad_func(x):
             with torch.enable_grad():
                 loss = func(x)
@@ -130,6 +162,10 @@ def solve_lower(u_noisy: torch.Tensor, inner_energy: Energy, method: str,
 
         nag_result = optimise_nag_unrolling(func, grad_func, param_groups, **options)
         lower_prob_result = parse_result(nag_result, **options)
+    elif method == 'your_custom_method':
+        # custom method for solving the lower problem or by map
+        # estimation of by mmse estimation goes here.
+        pass
     else:
         raise NotImplementedError
 

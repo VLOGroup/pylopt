@@ -7,16 +7,18 @@ from confuse import Configuration
 import argparse
 
 from bilevel_optimisation.dataset.ImageDataset import TestImageDataset
-from bilevel_optimisation.evaluation.Evaluation import compute_psnr
-from bilevel_optimisation.utils.ConfigUtils import load_app_config, parse_datatype
-from bilevel_optimisation.utils.dataset_utils import collate_function
-from bilevel_optimisation.utils.LoggingUtils import setup_logger
-from bilevel_optimisation.utils.SeedingUtils import seed_random_number_generators
-from bilevel_optimisation.utils.SetupUtils import (set_up_regulariser, set_up_measurement_model,
-                                                   set_up_inner_energy)
-from bilevel_optimisation.utils.TimerUtils import Timer
+from bilevel_optimisation.energy import Energy
+from bilevel_optimisation.fields_of_experts import FieldsOfExperts
+from bilevel_optimisation.filters import ImageFilter
 from bilevel_optimisation.lower_problem import solve_lower
-
+from bilevel_optimisation.measurement_model import MeasurementModel
+from bilevel_optimisation.potential import StudentT
+from bilevel_optimisation.utils.config_utils import load_app_config, parse_datatype
+from bilevel_optimisation.utils.dataset_utils import collate_function
+from bilevel_optimisation.utils.evaluation_utils import compute_psnr
+from bilevel_optimisation.utils.logging_utils import setup_logger
+from bilevel_optimisation.utils.seeding_utils import seed_random_number_generators
+from bilevel_optimisation.utils.Timer import Timer
 
 def load_data_from_file(root_path: str, file_name: str) -> torch.Tensor:
     file_path = os.path.join(root_path, file_name)
@@ -31,25 +33,32 @@ def denoise(config: Configuration):
     test_loader = DataLoader(test_image_dataset, batch_size=len(test_image_dataset), shuffle=False,
                              collate_fn=lambda x: collate_function(x, crop_size=-1))
 
-    regulariser = set_up_regulariser(config)
-    regulariser = regulariser.to(device=device, dtype=dtype)
+    image_filter = ImageFilter(config)
+    potential = StudentT(image_filter.get_num_filters(), config)
+    regulariser = FieldsOfExperts(potential, image_filter)
 
     test_batch = list(test_loader)[0]
     test_batch_ = test_batch.to(device=device, dtype=dtype)
 
-    measurement_model_ = set_up_measurement_model(test_batch_, config)
-    energy = set_up_inner_energy(measurement_model_, regulariser, config)
+    measurement_model = MeasurementModel(test_batch_, config)
+    energy = Energy(measurement_model, regulariser, config)
     energy.to(device=device, dtype=dtype)
 
-
     options_adam = {'max_num_iterations': 1000, 'rel_tol': 1e-4}
-    options_nag = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.71]}
+    options_nag = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.71], 'batch_optimisation': True}
     options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-5}
-    options_nag_unrolling = {'max_num_iterations': 1000, 'rel_tol': 1e-5}
+    # options_nag_unrolling = {'max_num_iterations': 10, 'rel_tol': 1e-5, 'alpha': [1e-3]}
+    # options_nag_unrolling = {'max_num_iterations': 10, 'rel_tol': 1e-5, 'lip_const': [1e4]}
 
     with Timer(device=device) as t:
-        lower_prob_result = solve_lower(energy.measurement_model.obs_noisy, inner_energy=energy,
-                                        method='adam', options=options_adam)
+        lower_prob_result = solve_lower(energy=energy, method='napg', options=options_napg)
+
+    # x = lower_prob_result.solution
+    # y = torch.sum(x ** 2)
+    #
+    # torch.autograd.grad(outputs=y, inputs=[p for p in energy.parameters() if p.requires_grad])
+
+
 
     print('denoising stats:')
     print(' > elapsed time [ms] = {:.5f}'.format(t.time_delta()))

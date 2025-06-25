@@ -1,5 +1,7 @@
+import os.path
 from typing import Dict, Any, Mapping, NamedTuple
 import torch
+from confuse import Configuration
 
 from bilevel_optimisation.data.ParamSpec import ParamSpec
 from bilevel_optimisation.potential.Potential import Potential
@@ -11,24 +13,59 @@ class StudentT(Potential):
     Class implementing student-t potential for the usage in context of FoE models.
     """
 
-    def __init__(self, num_potentials: int, weights_spec: ParamSpec):
-        super().__init__(num_potentials=num_potentials)
-        self.weights = torch.nn.Parameter(weights_spec.value, requires_grad=weights_spec.trainable)
-        setattr(self.weights, 'proj', non_negative_projection)
+    def __init__(self, num_marginals: int, config: Configuration):
+        super().__init__(num_marginals)
+
+        initialisation_mode = config['potential']['student_t']['initialisation'].get()
+        multiplier = config['potential']['student_t']['multiplier'].get()
+        trainable = config['potential']['student_t']['trainable'].get()
+
+        if initialisation_mode == 'rand':
+            weights = torch.rand(num_marginals)
+        else:
+            weights = torch.ones(num_marginals)
+
+        self.weight_tensor = torch.nn.Parameter(data=multiplier * weights, requires_grad=trainable)
+        model_path = config['potential']['student_t']['file_path'].get()
+        if model_path:
+            self.load_from_file(model_path)
+
+        setattr(self.weight_tensor, 'proj', non_negative_projection)
 
     def get_parameters(self) -> torch.Tensor:
         return self.weights.data
 
     def forward_negative_log(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.einsum('bfhw,f->', torch.log(1.0 + x ** 2), self.weights)
+        return torch.einsum('bfhw,f->', torch.log(1.0 + x ** 2), self.weight_tensor)
+
+    def forward_negative_log_marginal(self, x: torch.Tensor, j: int) -> torch.Tensor:
+        return torch.log(1.0 + x ** 2) * self.weight_tensors[j]
 
     def state_dict(self, *args, **kwargs) -> Dict[str, Any]:
         state = super().state_dict(*args, **kwargs)
         return state
 
     def initialisation_dict(self) -> Dict[str, Any]:
-        return {'type': self.__class__.__name__, 'num_potentials': self.num_potentials}
+        return {'num_marginals': self.num_marginals}
 
     def load_state_dict(self, state_dict: Mapping[str, Any], *args, **kwargs) -> NamedTuple:
         result = torch.nn.Module.load_state_dict(self, state_dict, strict=True)
         return result
+
+    def load_from_file(self, path_to_model: str, device: torch.device=torch.device('cpu')) -> None:
+
+        potential_data = torch.load(path_to_model, map_location=device)
+
+        initialisation_dict = potential_data['initialisation_dict']
+        self.num_marginals = initialisation_dict['num_marginals']
+
+        state_dict = potential_data['state_dict']
+        self.load_state_dict(state_dict)
+
+    def save(self, path_to_model_dir: str, model_name: str='student_t') -> str:
+        path_to_model = os.path.join(path_to_model_dir, '{:s}.pt'.format(model_name))
+        potential_dict = {'initialisation_dict': self.initialisation_dict(),
+                          'state_dict': self.state_dict()}
+
+        torch.save(potential_dict, path_to_model)
+        return path_to_model

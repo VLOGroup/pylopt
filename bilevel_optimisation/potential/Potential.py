@@ -9,19 +9,18 @@ class Potential(ABC, torch.nn.Module):
     per filter.
     Subclassing requires the implementation of the method forward_negative_log(...).
     """
-    def __init__(self, num_potentials: int):
+    def __init__(self, num_marginals: int):
         """
         Initialisation of an object of class Potential.
 
-        :param num_potentials: Number of potentials required for the FoE-model. By design
-            num_potentials equals the number of filters used in the FoE-model.
+        :param num_marginals: Number of marginal potentials required for the FoE-model. By design
+            there is one marginal potential per filter.
         """
         super().__init__()
-        num_potentials = torch.tensor(num_potentials, dtype=torch.uint16)
-        self.register_buffer('num_potentials', num_potentials)
+        self.num_marginals = num_marginals
 
-    def get_num_potentials(self) -> int:
-        return self.num_potentials.item()
+    def get_num_marginals(self) -> int:
+        return self.num_marginals
 
     @abstractmethod
     def get_parameters(self):
