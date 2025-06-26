@@ -12,6 +12,8 @@ import math
 from matplotlib import pyplot as plt
 from matplotlib import colormaps as cmaps
 from confuse import Configuration
+from itertools import chain
+
 
 from bilevel_optimisation.losses import BaseLoss
 from bilevel_optimisation.bilevel_problem.gradients import OptimisationAutogradFunction, UnrollingAutogradFunction
@@ -29,17 +31,23 @@ from bilevel_optimisation.utils.file_system_utils import save_foe_model
 
 def assemble_param_groups_base(regulariser: FieldsOfExperts, single_group_optimisation: bool=True):
     param_groups = []
-    filter_params = regulariser.get_image_filter().parameters()
-    filter_params_trainable = [p for p in filter_params if p.requires_grad]
 
-    potential_params = regulariser.get_potential().parameters()
-    potential_params_trainable = [p for p in potential_params if p.requires_grad]
+    param_lists = []
+    for child in regulariser.children():
+        param_lists.append([p for p in child.parameters() if p.requires_grad])
+
+
+        # filter_params = regulariser.get_image_filter().parameters()
+        # filter_params_trainable = [p for p in filter_params if p.requires_grad]
+        #
+        # potential_params = regulariser.get_potential().parameters()
+        # potential_params_trainable = [p for p in potential_params if p.requires_grad]
 
     if single_group_optimisation:
-        group = {'params': filter_params_trainable + potential_params_trainable}
+        group = {'params': list(chain.from_iterable(param_lists))}
         param_groups.append(group)
     else:
-        for params in [filter_params_trainable, potential_params_trainable]:
+        for params in param_lists:
             group = {'params': params}
             param_groups.append(group)
 
@@ -166,7 +174,7 @@ class BilevelOptimisation:
                 return UnrollingAutogradFunction.apply(energy, denoising_func,
                                                        lambda z: upper_loss(u_clean, z), params)
         else:
-            def func(params: List[torch.nn.Parameter]) -> torch.Tensor:
+            def func(*params) -> torch.Tensor:
                 return OptimisationAutogradFunction.apply(energy, denoising_func,
                                                           lambda z: upper_loss(u_clean, z), self.solver,
                                                           params)
@@ -246,10 +254,15 @@ class BilevelOptimisation:
                    return lower_prob_result.solution
 
                autograd_func = self._loss_func_factory(upper_loss_func, energy, batch_, denoising_func)
-               def grad_func(trainable_params):
+               def grad_func(*trainable_params):
                    with torch.enable_grad():
-                       loss = autograd_func(trainable_params)
-                   return list(torch.autograd.grad(outputs=loss, inputs=[trainable_params]))
+                       pp = [p.detach().clone().requires_grad_(True) for p in trainable_params]
+                       # loss = autograd_func(*pp)
+                       loss = OptimisationAutogradFunction.apply(energy, denoising_func,
+                                                          lambda z: upper_loss_func(batch_, z), self.solver,
+                                                          *pp)
+                       # grads = torch.autograd.grad(outputs=loss, inputs=pp)
+                   return list(torch.autograd.grad(outputs=loss, inputs=pp))
 
                loss_train = step_nag(autograd_func, grad_func, param_groups_)
                self.writer.add_scalar('loss/train', loss_train, k + 1)
