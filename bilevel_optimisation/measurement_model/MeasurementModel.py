@@ -1,6 +1,6 @@
 import torch
 from functools import cached_property
-import logging
+from confuse import Configuration
 
 class MeasurementModel(torch.nn.Module):
     """
@@ -8,27 +8,42 @@ class MeasurementModel(torch.nn.Module):
     Observations are assumed to be a sum of a forward operator applied to the clean data and noise sampled from
     the multivariate normal distribution with zero mean and covariance matrix (noise_level ** 2) * I.
     """
-    def __init__(self, u_clean: torch.Tensor, operator: torch.nn.Module, noise_level: float) -> None:
+    def __init__(self, u_clean: torch.Tensor, config: Configuration) -> None:
         """
         Initialisation of an object of class MeasurementModel. The clean data tensor u_clean is
         stored as a non-trainable parameter.
 
         :param u_clean: Tensor of shape [batch_size, channels, height, width]
-        :param operator: Module representing the forward operator (e.g. torch.nn.Identity() for image denoising)
-        :param noise_level: Standard deviation of additive gaussian noise
+        :config
         """
         super().__init__()
         self.u_clean = torch.nn.Parameter(u_clean, requires_grad=False)
-        self._operator = operator
-        self.noise_level = noise_level
 
-    def obs_clean(self) -> torch.nn.Parameter:
+        # TODO:
+        #   > extend search for operators to submodule (operators f.e.) such that custom forward operators can be used
+        operator_name = config['measurement_model']['forward_operator'].get()
+        self.operator = getattr(torch.nn, operator_name)()
+        self.noise_level = config['measurement_model']['noise_level'].get()
+
+        self.u_noisy = torch.nn.Parameter(self.make_noisy_observation(), requires_grad = False)
+
+    def get_clean_data(self) -> torch.nn.Parameter:
         """
         Returns the clean data tensor to the caller
 
         :return: torch.Tensor
         """
         return self.u_clean
+
+    def make_noisy_observation(self) -> torch.Tensor:
+        obs_clean = self.operator(self.u_clean)
+        return obs_clean + self.noise_level * torch.randn_like(obs_clean)
+
+    def get_noisy_observation(self) -> torch.nn.Parameter:
+        return self.u_noisy
+
+    def set_noisy_observation(self, noisy_obs: torch.Tensor):
+        self.obs_noisy.copy_(noisy_obs)
 
     @cached_property
     def obs_noisy(self) -> torch.nn.Parameter:
@@ -38,7 +53,7 @@ class MeasurementModel(torch.nn.Module):
 
         :return: torch.nn.Parameter
         """
-        obs_clean = self._operator(self.u_clean)
+        obs_clean = self.operator(self.u_clean)
         return torch.nn.Parameter(obs_clean + self.noise_level * torch.randn_like(obs_clean), requires_grad=False)
 
     def _data_fidelity(self, u: torch.Tensor) -> torch.Tensor:
@@ -50,7 +65,6 @@ class MeasurementModel(torch.nn.Module):
         :param u: Tensor of the same shape as clean or noisy data tensor.
         :return: Scaled squared l2-norm in terms of a torch.Tensor.
         """
-
         return 0.5 * torch.sum((u - self.obs_noisy) ** 2) / self.noise_level ** 2
 
     def forward(self, u: torch.Tensor) -> torch.Tensor:

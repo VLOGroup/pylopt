@@ -1,32 +1,3 @@
-regulariser:
-  potential:
-    name: 'StudentT'
-    parameters:
-      student_t:
-        initialisation:
-          name: 'uniform'
-          multiplier: 0.001
-        trainable: True
-  image_filter:
-    trainable: False
-    initialisation:
-      file: 'foe_filters_7x7_chen-ranftl-pock_2014.pt'
-      multiplier: 255
-
-inner_energy:
-  lam: 0.5
-  optimiser:
-    name: 'NAGOptimiser'
-    use_prox: False
-    stopping:
-      name: 'EarlyStopping'
-      parameters: {max_num_iterations: 1000, rel_tol: 0.00001}
-
-bilevel:
-  optimiser:
-    name: 'NAGOptimiser'
-    parameters: {beta: 0.71, lip_const: 100000}
-
 data:
   type: 'float64'
   dataset:
@@ -35,4 +6,12 @@ data:
     test:
       root_dir: '/home/florianthaler/Documents/data/image_data/some_images'
 
+image_filter:
+  file_path: '/home/florianthaler/Documents/research/bilevel_optimisation/bilevel_optimisation/model_data/foe_filters_7x7_chen-ranftl-pock_2014.pt'
+  multiplier: 255
 
+potential:
+  student_t:
+    trainable: True
+    initialisation: 'uniform'
+    multiplier: 0.001

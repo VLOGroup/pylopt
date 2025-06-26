@@ -31,5 +31,3 @@ measurement_model:
   noise_level: 0.1
   forward_operator: 'Identity'
 
-energy:
-  lam: 0.5

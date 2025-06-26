@@ -1,32 +1,3 @@
-#regulariser:
-#  potential:
-#    name: 'StudentT'
-#    parameters:
-#      student_t:
-#        initialisation:
-#          file: 'student_t_potential_thaler_2025.pt'
-#          multiplier: 1.0
-#        trainable: True
-#  image_filter:
-#    initialisation:
-#      file: 'foe_filters_7x7_chen-ranftl-pock_2014_scaled.pt'
-#      multiplier: 1.0
-#    trainable: False
-#
-#measurement_model:
-#  forward_operator: 'Identity'
-#  noise_level: 0.1
-#
-#inner_energy:
-#  type: 'OptimisationEnergy'          # values in ['OptimisationEnergy', 'UnrollingEnergy']
-#  lam: 0.5
-#  optimiser:
-#    name: 'NAGOptimiser'
-#    parameters: {lip_const: 1024}
-#    stopping:
-#      name: 'EarlyStopping'
-#      parameters: {max_num_iterations: 1000, rel_tol: 0.00001}
-
 data:
   type: 'float32'
   dataset:

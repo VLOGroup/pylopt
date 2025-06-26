@@ -1,16 +1,15 @@
 regulariser:
   potential:
-    name: 'StudentT'
+    name: 'LinearSpline'
     parameters:
-      student_t:
+      linear_spline:
         initialisation:
-          file: 'student_t_potential_thaler_2025.pt'
-          multiplier: 1.0
+          file: 'linear_spline_potential_dummy.pt'
         trainable: False
   image_filter:
     initialisation:
       file: 'foe_filters_7x7_chen-ranftl-pock_2014_scaled.pt'
-      multiplier: 1.0
+      multiplier: 1
     trainable: False
 
 measurement_model:
@@ -24,8 +23,8 @@ inner_energy:
     name: 'NAGOptimiser'
     parameters: {lip_const: 1024}
     stopping:
-      name: 'EarlyStopping'
-      parameters: {max_num_iterations: 1000, rel_tol: 0.00001}
+      name: 'FixedIterationsStopping'
+      parameters: {max_num_iterations: 300}
 
 data:
   type: 'float32'

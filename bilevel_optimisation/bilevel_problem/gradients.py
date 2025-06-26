@@ -27,7 +27,7 @@ def compute_hvp_mixed(energy: Energy, u: torch.Tensor, v: torch.Tensor) -> List[
     return list(d2e_mixed)
 
 
-class OptimisationAutograd(Function):
+class OptimisationAutogradFunction(Function):
     """
     Subclass of torch.autograd.Function. It implements the implicit differentiation scheme
     to compute the gradients of optimiser of the inner problem w.r.t. to the parameters
@@ -58,8 +58,7 @@ class OptimisationAutograd(Function):
         :param params: List of PyTorch parameters whose gradients need to be computed.
         :return: Current outer loss
         """
-        u_noisy = energy.measurement_model.obs_noisy
-        u_denoised = denoising_func(u_noisy)
+        u_denoised = denoising_func()
         ctx.save_for_backward(u_denoised.detach().clone())
 
         ctx.energy = energy
@@ -113,36 +112,37 @@ class OptimisationAutograd(Function):
         energy = ctx.energy
         outer_loss_func = ctx.loss_func
         solver = ctx.solver
-        lagrange_multiplier = OptimisationAutograd.compute_lagrange_multiplier(outer_loss_func, energy,
+        lagrange_multiplier = OptimisationAutogradFunction.compute_lagrange_multiplier(outer_loss_func, energy,
                                                                                        u_denoised, solver)
         grad_params = compute_hvp_mixed(energy, u_denoised.detach(), lagrange_multiplier)
         energy.zero_grad()
 
         return None, None, None, None, *grad_params
 
-class UnrollingBackwardFunction(Function):
+class UnrollingAutogradFunction(Function):
     """
     Subclass of torch.autograd.Function with the purpose to provide a custom backward
     function based on an unrolling scheme.
     """
     @staticmethod
-    def forward(ctx: FunctionCtx, inner_energy: Energy,
+    def forward(ctx: FunctionCtx, energy: Energy, denoising_func: Callable,
                 loss_func: torch.nn.Module, *params) -> torch.Tensor:
-        x_noisy = inner_energy.measurement_model.obs_noisy
-        x_denoised = inner_energy.argmin(x_noisy)
+        x_noisy = energy.measurement_model.obs_noisy.detach().clone()
+        x_noisy.requires_grad = True
+        x_denoised = denoising_func(x_noisy)
 
         with torch.enable_grad():
             loss = loss_func(x_denoised)
-        grad_params = torch.autograd.grad(outputs=loss, inputs=[p for p in inner_energy.parameters() if p.requires_grad])
+        grad_params = torch.autograd.grad(outputs=loss, inputs=[p for p in energy.parameters() if p.requires_grad])
 
         ctx.grad_params = grad_params
-        ctx.inner_energy = inner_energy
+        ctx.inner_energy = energy
         return loss
 
     @staticmethod
     def backward(ctx: FunctionCtx, *grad_output: torch.Tensor) -> Any:
         grad_params = ctx.grad_params
-        inner_energy = ctx.inner_energy
-        inner_energy.zero_grad()
+        energy = ctx.energy
+        energy.zero_grad()
 
-        return None, None, *grad_params
+        return None, None, None, *grad_params

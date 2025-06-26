@@ -1,5 +1,6 @@
 import torch
 from abc import ABC
+from confuse import Configuration
 
 from bilevel_optimisation.measurement_model import MeasurementModel
 
@@ -16,7 +17,7 @@ class Energy(torch.nn.Module, ABC):
 
         :param measurement_model: Object of class MeasurementModel
         :param regulariser: Regulariser modelled as inheritance of class torch.nn.Module
-        :param lam: Regularisation parameter scaling the regularisation term
+        :param lam: Regularisation parameter
         """
         super().__init__()
         self.measurement_model = measurement_model

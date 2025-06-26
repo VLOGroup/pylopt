@@ -1,14 +1,14 @@
 regulariser:
   potential:
-    name: 'GaussianMixture'
+    name: 'LinearSpline'
     parameters:
-      gaussian_mixture:
-        num_components: 11
+      linear_spline:
+        num_nodes: 37
         box_lower: -1.0
         box_upper: 1.0
         initialisation:
-          file: ''
-          name: 'uniform'
+          name: 'student_t'
+          multiplier: 0.001                 # applied iff model is not loaded from file
         trainable: True
   image_filter:
     trainable: False
