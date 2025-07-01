@@ -16,4 +16,7 @@ potential:
     initialisation:
       mode: 'uniform'
     trainable: True
-    multiplier: 0.0025
+    multiplier: 0.005
+
+energy:
+  lam: 0.5
