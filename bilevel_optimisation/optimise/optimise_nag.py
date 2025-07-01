@@ -3,7 +3,7 @@ from typing import List, Dict, Any, Callable, Optional
 import math
 
 from bilevel_optimisation.data import OptimiserResult
-from bilevel_optimisation.data.Constants import EPSILON, MAX_NUM_UNROLLING_ITER
+from bilevel_optimisation.data.Constants import EPSILON, MAX_NUM_ITERATIONS_DEFAULT
 
 DEFAULTS = {'alpha': None, 'beta': None, 'theta': 0.0, 'lip_const': 1e5,
             'max_num_backtracking_iterations': 10, 'proj': None, 'prox': None}
@@ -28,6 +28,10 @@ def harmonise_param_groups_nag(param_groups: List[Dict[str, Any]], break_graph: 
             group_['params'] = [p.detach().clone().requires_grad_(True) for p in group['params']]
         else:
             group_['params'] = [p for p in group['params']]
+
+            # TODO:
+            #   > check if detaching and cloning is needed in some of the applications ...
+            # group_['params'] = [p.detach().clone().requires_grad_(True) for p in group['params']]
 
         for key, value in DEFAULTS.items():
             group_[key] = group.get(key, value)
@@ -57,18 +61,18 @@ def make_gradient_step(param_group: Dict[str, Any], param_group_grads: List[torc
     if in_place:
         for p, grad_p in zip(param_group['params'], param_group_grads):
             p.data.sub_(step_size * grad_p)
-            if param_group['prox']:
-                p.data.copy_(param_group['prox'](p.data, step_size))
-            if param_group['proj']:
-                p.data.copy_(param_group['proj'](p.data))
+            if hasattr(p, 'prox'):
+                p.data.copy_(p.prox(p.data, step_size))
+            if hasattr(p, 'proj'):
+                p.data.copy_(p.proj(p.data))
     else:
         params_new = []
         for p, grad_p in zip(param_group['params'], param_group_grads):
             p = p - step_size * grad_p
-            if param_group['prox']:
-                p = param_group['prox'](p, step_size)
-            if param_group['proj']:
-                p = param_group['proj'](p)
+            if hasattr(p, 'prox'):
+                p = p.prox(p, step_size)
+            if hasattr(p, 'proj'):
+                p = p.proj(p)
             params_new.append(p)
         param_group['params'] = params_new
 
@@ -76,7 +80,7 @@ def flatten_groups(param_groups: List[Dict[str, Any]]) -> List[torch.Tensor]:
     return [p for group in param_groups for p in group['params']]
 
 def compute_quadratic_approximation(param_group_new: Dict[str, Any],
-                                    param_group: Dict[str, Any],
+                                    param_group: List[torch.Tensor],
                                     grad_group_list: List[torch.Tensor], loss: torch.Tensor,
                                     lip_const: float) -> torch.Tensor:
     """
@@ -91,26 +95,16 @@ def compute_quadratic_approximation(param_group_new: Dict[str, Any],
     :param lip_const: Current guess of the gradients Lipschitz constant
     :return: Quadratic approximation of loss.
     """
-    quadr_approx = loss.clone()
-    for p_new, p, grad_p in zip(param_group_new['params'], param_group['params'], grad_group_list):
+    quadr_approx = loss.detach().clone()
+    for p_new, p, grad_p in zip(param_group_new['params'], param_group, grad_group_list):
         quadr_approx += (torch.sum(grad_p * (p_new.data - p.data)) +
                          0.5 * lip_const * torch.sum((p_new.data - p.data) ** 2))
     return quadr_approx
 
-def copy_param_groups_partial(param_groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    param_groups_ = []
-    for group in param_groups:
-        group_ = {'params': [p.detach().clone() for p in group['params']],
-                  'prox': group['prox'],
-                  'proj': group['proj']}
-        param_groups_.append(group_)
-    return param_groups_
-
 def apply_backtracking(func: Callable, param_groups: List[Dict[str, Any]], group_idx: int,
                        group_grads: List[torch.Tensor], in_place: bool) -> None:
-    param_groups_orig = copy_param_groups_partial(param_groups)
-    params_flat_orig = flatten_groups(param_groups_orig)
-    loss = func(*params_flat_orig)
+    params_orig = [[p.data.detach().clone() for p in group['params']] for group in param_groups]
+    loss = func(*flatten_groups(param_groups))
 
     for k in range(0, param_groups[group_idx]['max_num_backtracking_iterations']):
         lip_const = param_groups[group_idx]['lip_const']
@@ -120,7 +114,7 @@ def apply_backtracking(func: Callable, param_groups: List[Dict[str, Any]], group
         params_flat_ = flatten_groups(param_groups)
         loss_new = func(*params_flat_)
 
-        quadratic_approx = compute_quadratic_approximation(param_groups[group_idx], param_groups_orig[group_idx],
+        quadratic_approx = compute_quadratic_approximation(param_groups[group_idx], params_orig[group_idx],
                                                            group_grads, loss, lip_const)
 
         if loss_new <= quadratic_approx:
@@ -128,8 +122,13 @@ def apply_backtracking(func: Callable, param_groups: List[Dict[str, Any]], group
             break
         else:
             param_groups[group_idx]['lip_const'] *= 2.0
-            param_groups[group_idx]['params'] = [p_orig.detach().clone().requires_grad_(True)
-                                                 for p_orig in param_groups_orig[group_idx]['params']]
+
+            # TODO: this may break for unrolling!!!
+            # param_groups[group_idx]['params'] = [p_orig.detach().clone().requires_grad_(True)
+            #                                      for p_orig in param_groups_orig[group_idx]['params']]
+            for p, p_orig in zip(param_groups[group_idx]['params'], params_orig[group_idx]):
+                p.copy_(p_orig)
+
 
 def compute_relative_error(param_groups: List[Dict[str, Any]]) -> torch.Tensor:
     error = 0.0
@@ -137,23 +136,29 @@ def compute_relative_error(param_groups: List[Dict[str, Any]]) -> torch.Tensor:
     for group in param_groups:
         for p, p_old in zip(group['params'], group['history']):
             error += torch.sum((p - p_old) ** 2)
-            nrm += torch.sum(p ** 2)
+            nrm += torch.sum(p_old ** 2)
 
-    return torch.sqrt(error) / (torch.sqrt(nrm) + EPSILON)
+            error = torch.linalg.norm(p - p_old)
+
+    # TODO: fix me/clean me up
+
+    return error # torch.sqrt(error) / (torch.sqrt(nrm) + EPSILON)
 
 def step_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]], in_place: bool=True) -> torch.Tensor:
-    loss = func(*flatten_groups(param_groups))
+    params_flat = flatten_groups(param_groups)
+    params_flat_ = [p.requires_grad_(True) for p in params_flat]
+    loss = func(*params_flat_)
+    # with torch.enable_grad():
+    #
+
+    # grads = torch.autograd.grad(inputs=params_flat, outputs=loss)
+
     grad_idx = 0
     for group_idx, group in enumerate(param_groups):
-        make_intermediate_step(group, in_place)
-
-        params_flat = flatten_groups(param_groups)
-
-        # with torch.enable_grad():
-        #     f = func(*params_flat)
-        # grads = torch.autograd.grad(outputs=f, inputs=params_flat)
 
         grads = grad_func(*params_flat)
+
+        make_intermediate_step(group, in_place)
         group_grads = grads[grad_idx: grad_idx + len(group['params'])]
 
         if group['alpha']:
@@ -166,25 +171,25 @@ def step_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[str, A
 
 
 @torch.no_grad()
-def optimise_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]], max_num_iterations: int=1000,
+def optimise_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]],
+                 max_num_iterations: int=MAX_NUM_ITERATIONS_DEFAULT,
                  rel_tol: Optional[float]=None, **unknown_options) -> OptimiserResult:
     num_iterations = max_num_iterations
     param_groups_ = harmonise_param_groups_nag(param_groups)
 
     for k in range(0, max_num_iterations):
-        step_nag(func, grad_func, param_groups_)
+        l = step_nag(func, grad_func, param_groups_)
+
 
         if rel_tol:
             rel_error = compute_relative_error(param_groups_)
+
             if rel_error <= rel_tol:
                 num_iterations = k + 1
                 break
 
     result = OptimiserResult(solution=param_groups_, num_iterations=num_iterations,
                              loss=func(*flatten_groups(param_groups_)))
-
-
-
     return result
 
 def optimise_nag_unrolling(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]],
@@ -219,10 +224,7 @@ def optimise_nag_unrolling(func: Callable, grad_func: Callable, param_groups: Li
     return OptimiserResult(solution=param_groups_, num_iterations=num_iterations,
                              loss=func(*flatten_groups(param_groups_)))
 
-
-
-
-# def optimise_nag_unrolling(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]],
+# def optimise_nag_unrolling_old(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]],
 #                            max_num_iterations: int=50, num_unrolling_iterations: int=10,
 #                            rel_tol: float=None, **unknown_options) -> OptimiserResult:
 #     num_iterations = max_num_iterations
