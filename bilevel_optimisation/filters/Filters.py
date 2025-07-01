@@ -1,3 +1,5 @@
+import os.path
+
 import torch
 from typing import Dict, Any, Mapping, NamedTuple
 from confuse import Configuration
@@ -15,11 +17,11 @@ class ImageFilter(torch.nn.Module):
         self.padding = self.filter_dim // 2
         self.padding_mode = config['image_filter']['padding_mode'].get()
 
-        initialisation_mode = config['image_filter']['initialisation'].get()
+        initialisation_mode = config['image_filter']['initialisation']['mode'].get()
         multiplier = config['image_filter']['multiplier'].get()
         trainable = config['image_filter']['trainable'].get()
 
-        model_path = config['image_filter']['file_path'].get()
+        model_path = config['image_filter']['initialisation']['file_path'].get()
         if not model_path:
             if initialisation_mode == 'dct':
                 can_basis = np.reshape(np.eye(self.filter_dim ** 2, dtype=np.float64),
@@ -38,6 +40,14 @@ class ImageFilter(torch.nn.Module):
             self._load_from_file(model_path)
         with torch.no_grad():
             self.filter_tensor.mul_(multiplier)
+
+            # TODO: clean me up!
+                    # f = torch.load(
+                    #     '/home/florianthaler/Documents/research/bilevel_optimisation/data/data_batches/filters.pt').cuda().to(
+                    #     dtype=torch.float32)
+                    # self.filter_tensor = torch.nn.Parameter(data=f, requires_grad=trainable)
+
+
         if not hasattr(self.filter_tensor, 'proj'):
             setattr(self.filter_tensor, 'proj', zero_mean_projection)
 
@@ -74,6 +84,10 @@ class ImageFilter(torch.nn.Module):
         state_dict = filter_data['state_dict']
         self.load_state_dict(state_dict)
 
+    def save(self, path_to_model_dir: str, model_name: str='filters') -> str:
+        path_to_model = os.path.join(path_to_model_dir, '{:s}.pt'.format(os.path.splitext(model_name)[0]))
+        potential_dict = {'initialisation_dict': self.initialisation_dict(),
+                          'state_dict': self.state_dict()}
 
-    def save(self, path_to_model_dir: str, model_name: str):
-        pass
+        torch.save(potential_dict, path_to_model)
+        return path_to_model

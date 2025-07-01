@@ -15,19 +15,25 @@ data:
 image_filter:
   filter_dim: 7
   padding_mode: 'reflect'
-  initialisation: 'dct'
+  initialisation:
+    mode: 'dct'
+    file_path: ''
   multiplier: 1.0
   trainable: False
-  file_path: ''
+
 
 potential:
   student_t:
+    initialisation:
+      mode: 'uniform'
+      file_path: ''
     multiplier: 1.0
     trainable: False
-    initialisation: 'uniform'
-    file_path: ''
 
 measurement_model:
   noise_level: 0.1
   forward_operator: 'Identity'
+
+energy:
+  lam: 0.1
 
