@@ -40,14 +40,7 @@ class ImageFilter(torch.nn.Module):
             self._load_from_file(model_path)
         with torch.no_grad():
             self.filter_tensor.mul_(multiplier)
-
-            # TODO: clean me up!
-                    # f = torch.load(
-                    #     '/home/florianthaler/Documents/research/bilevel_optimisation/data/data_batches/filters.pt').cuda().to(
-                    #     dtype=torch.float32)
-                    # self.filter_tensor = torch.nn.Parameter(data=f, requires_grad=trainable)
-
-
+            self.filter_tensor.copy_(zero_mean_projection(self.filter_tensor))
         if not hasattr(self.filter_tensor, 'proj'):
             setattr(self.filter_tensor, 'proj', zero_mean_projection)
 

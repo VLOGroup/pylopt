@@ -1,0 +1,18 @@
+data:
+  type: 'float32'
+  dataset:
+    test:
+      root_dir: '/home/florianthaler/Documents/data/image_data/some_images'
+
+image_filter:
+  initialisation:
+    mode: 'randn'
+  multiplier: 5
+
+potential:
+  student_t:
+    initialisation:
+      mode: uniform
+    multiplier: 0.0025
+
+
