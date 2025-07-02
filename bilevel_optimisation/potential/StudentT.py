@@ -30,7 +30,7 @@ class StudentT(Potential):
             self._load_from_file(model_path)
 
         with torch.no_grad():
-            self.weight_tensor.add_(torch.log(multiplier))
+            self.weight_tensor.add_(torch.log(torch.tensor(multiplier)))
 
     def get_parameters(self) -> torch.Tensor:
         return self.weight_tensor.data

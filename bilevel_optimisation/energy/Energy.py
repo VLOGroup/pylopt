@@ -1,7 +1,7 @@
 import torch
 from abc import ABC
-from confuse import Configuration
 
+from bilevel_optimisation.fields_of_experts import FieldsOfExperts
 from bilevel_optimisation.measurement_model import MeasurementModel
 
 class Energy(torch.nn.Module, ABC):
@@ -11,7 +11,7 @@ class Energy(torch.nn.Module, ABC):
     argmin().
     """
     def __init__(self, measurement_model: MeasurementModel,
-                 regulariser: torch.nn.Module, lam: float) -> None:
+                 regulariser: FieldsOfExperts, lam: float) -> None:
         """
         Initialisation of an object of class InnerEnergy
 

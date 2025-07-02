@@ -8,6 +8,9 @@ from bilevel_optimisation.optimise import optimise_nag, optimise_adam, optimise_
 def assemble_param_groups_base(u: torch.Tensor, batch_optimisation: bool) -> List[Dict[str, Any]]:
     param_groups = []
     if not batch_optimisation and u.shape[0] > 1:
+
+        # TODO: vectorise me !!!
+
         for item in torch.split(u, split_size_or_sections=1, dim=0):
             group = {'params': [torch.nn.Parameter(item, requires_grad=True)]}
             param_groups.append(group)
@@ -23,10 +26,13 @@ def add_group_options(param_groups: List[Dict[str, Any]], group_options: Dict[st
                 group[key] = values[group_idx]
 
 def add_prox(param_groups: List[Dict[str, Any]], u: torch.Tensor, energy: Energy) -> None:
-    prox_map = lambda x, tau: (((tau / energy.measurement_model.noise_level) * u + x)
-                               / (1 + (tau / energy.measurement_model.noise_level)))
+    u_ = u.detach().clone()
+    prox_map = lambda x, tau: (((tau / energy.measurement_model.noise_level ** 2) * u_ + x)
+                               / (1 + (tau / energy.measurement_model.noise_level ** 2)))
+
     for group in param_groups:
-        group['prox'] = prox_map
+        for p in group['params']:
+            setattr(p, 'prox', prox_map)
 
 def assemble_param_groups_nag(u: torch.Tensor, alpha: List[Optional[float]]=None,
                               beta: List[Optional[float]]=None,
@@ -84,9 +90,9 @@ def build_gradient_func(func: Callable, batch_optim: bool) -> Callable:
     if batch_optim:
         def grad_func(x: torch.Tensor) -> List[torch.Tensor]:
             with torch.enable_grad():
-                x.requires_grad_(True)
-                loss = func(x)
-            return list(torch.autograd.grad(outputs=loss, inputs=[x]))
+                x_ = x.detach().clone().requires_grad_(True)
+                loss = func(x_)
+            return list(torch.autograd.grad(outputs=loss, inputs=[x_]))
     else:
         def grad_func(*x: torch.Tensor):
             with torch.enable_grad():
@@ -99,8 +105,7 @@ def build_gradient_func(func: Callable, batch_optim: bool) -> Callable:
 def solve_lower(energy: Energy, method: str,
                 options: Dict[str, Any], noisy_obs: Optional[torch.Tensor]=None) -> LowerProblemResult:
     noisy_obs = noisy_obs if noisy_obs is not None else energy.measurement_model.get_noisy_observation()
-    u_ = noisy_obs.detach().clone()
-    u_.requires_grad = True
+    u_ = noisy_obs.detach().clone().requires_grad_(True)
 
     batch_optim = options.get('batch_optimisation', True)
 

@@ -5,6 +5,7 @@ from torch.autograd.function import FunctionCtx
 
 from bilevel_optimisation.energy.Energy import Energy
 from bilevel_optimisation.solver import LinearSystemSolver
+from bilevel_optimisation.lower_problem.solve_lower import solve_lower
 
 def compute_hvp_state(energy: Energy, u: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
     with torch.enable_grad():
@@ -44,7 +45,7 @@ class OptimisationAutogradFunction(Function):
     """
 
     @staticmethod
-    def forward(ctx: FunctionCtx, energy: Energy, denoising_func: Callable, loss_func: torch.nn.Module,
+    def forward(ctx: FunctionCtx, energy: Energy, method_lower, options_lower, loss_func: torch.nn.Module,
                 solver: LinearSystemSolver, *params) -> torch.Tensor:
         """
         Function which needs to be implemented due to subclassing from torch.autograd.Function.
@@ -58,7 +59,7 @@ class OptimisationAutogradFunction(Function):
         :param params: List of PyTorch parameters whose gradients need to be computed.
         :return: Current outer loss
         """
-        u_denoised = denoising_func()
+        u_denoised = solve_lower(energy, method_lower, options_lower).solution
         ctx.save_for_backward(u_denoised.detach().clone())
 
         ctx.energy = energy
@@ -115,9 +116,12 @@ class OptimisationAutogradFunction(Function):
         lagrange_multiplier = OptimisationAutogradFunction.compute_lagrange_multiplier(outer_loss_func, energy,
                                                                                        u_denoised, solver)
         grad_params = compute_hvp_mixed(energy, u_denoised.detach(), lagrange_multiplier)
+
+
+
         energy.zero_grad()
 
-        return None, None, None, None, *grad_params
+        return None, None, None, None, None, *grad_params
 
 class UnrollingAutogradFunction(Function):
     """

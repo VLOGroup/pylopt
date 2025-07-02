@@ -2,14 +2,13 @@ import torch
 from typing import Any, Mapping, Dict, NamedTuple
 
 from bilevel_optimisation.data.Constants import EPSILON
-from bilevel_optimisation.data.ParamSpec import ParamSpec
 from bilevel_optimisation.potential.Potential import Potential
-from bilevel_optimisation.projection.ParameterProjections import non_negative_projection
+
 
 class LinearSplinePotential(Potential):
 
     def __init__(self, num_nodes: int, box_lower: float, box_upper: float,
-                 param_spec: ParamSpec) -> None:
+                 param_spec) -> None:
         num_potentials = param_spec.value.shape[0]
         super().__init__(num_potentials=num_potentials)
 

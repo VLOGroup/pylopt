@@ -1,173 +1,52 @@
-import os
 import torch
-from torch.utils.data import DataLoader
-from torch.utils.tensorboard import SummaryWriter
-import logging
 from confuse import Configuration
 import argparse
+import os
+from torch.utils.tensorboard import SummaryWriter
 
+from bilevel_optimisation.bilevel_problem.solve_bilevel import BilevelOptimisation
+from bilevel_optimisation.callbacks import SaveModel, PlotFiltersAndPotentials, TrainingMonitor
 from bilevel_optimisation.dataset.ImageDataset import TestImageDataset, TrainingImageDataset
-from bilevel_optimisation.evaluation.Evaluation import evaluate_on_test_data
-from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
-from bilevel_optimisation.utils.dataset_utils import collate_function
-from bilevel_optimisation.utils.LoggingUtils import (setup_logger, log_trainable_params_stats,
-                                                     log_gradient_norms)
-from bilevel_optimisation.utils.SeedingUtils import seed_random_number_generators
-from bilevel_optimisation.utils.FileSystemUtils import create_evaluation_dir, save_foe_model
-from bilevel_optimisation.utils.SetupUtils import (set_up_regulariser, set_up_bilevel_problem,
-                                                   set_up_measurement_model, set_up_inner_energy,
-                                                   set_up_outer_loss)
-from bilevel_optimisation.utils.ConfigUtils import parse_datatype, load_app_config
-from bilevel_optimisation.visualisation.Visualisation import (visualise_training_stats, visualise_filter_stats,
-                                                              visualise_filters, visualise_gmm_potential,
-                                                              visualise_student_t_training_stats,
-                                                              visualise_student_t_potential)
-
-from bilevel_optimisation.bilevel.Bilevel import BilevelOptimisation
-
-def visualise_intermediate_results(regulariser: FieldsOfExperts, device: torch.device, dtype: torch.dtype,
-                                   curr_iter: int, path_to_data_dir: str, filter_image_subdir: str = 'filters',
-                                   potential_image_subdir: str = 'potential') -> None:
-    # visualise filters
-    filter_images_dir_path = os.path.join(path_to_data_dir, filter_image_subdir)
-    if not os.path.exists(filter_images_dir_path):
-        os.makedirs(filter_images_dir_path, exist_ok=True)
-    visualise_filters(regulariser.get_image_filter().get_filter_tensor(), fig_dir_path=filter_images_dir_path,
-                      file_name='filters_iter_{:d}.png'.format(curr_iter + 1))
-
-    # visualise potential functions (per filter)
-    potential = regulariser.get_potential()
-    if type(potential).__name__ == 'GaussianMixture':
-        potential_images_dir_path = os.path.join(path_to_data_dir, potential_image_subdir)
-        if not os.path.exists(potential_images_dir_path):
-            os.makedirs(potential_images_dir_path, exist_ok=True)
-        visualise_gmm_potential(regulariser.get_potential(), device, dtype, fig_dir_path=potential_images_dir_path,
-                                file_name='potential_iter_{:d}.png'.format(curr_iter + 1))
-
-    if type(potential).__name__ == 'StudentT':
-        potential_images_dir_path = os.path.join(path_to_data_dir, potential_image_subdir)
-        if not os.path.exists(potential_images_dir_path):
-            os.makedirs(potential_images_dir_path, exist_ok=True)
-        visualise_student_t_potential(regulariser.get_potential(), device, dtype, potential_images_dir_path,
-                                      file_name='potential_iter_{:d}.png'.format(curr_iter + 1))
+from bilevel_optimisation.fields_of_experts import FieldsOfExperts
+from bilevel_optimisation.filters import ImageFilter
+from bilevel_optimisation.potential import StudentT
+from bilevel_optimisation.utils.logging_utils import setup_logger
+from bilevel_optimisation.utils.seeding_utils import seed_random_number_generators
+from bilevel_optimisation.utils.file_system_utils import create_evaluation_dir
+from bilevel_optimisation.utils.config_utils import parse_datatype, load_app_config
 
 def bilevel_learn(config: Configuration):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     dtype = parse_datatype(config)
 
     train_data_root_dir = config['data']['dataset']['train']['root_dir'].get()
-    train_image_dataset = TrainingImageDataset(root_path=train_data_root_dir, dtype=dtype)
-
     test_data_root_dir = config['data']['dataset']['test']['root_dir'].get()
+    train_image_dataset = TrainingImageDataset(root_path=train_data_root_dir, dtype=dtype)
     test_image_dataset = TestImageDataset(root_path=test_data_root_dir, dtype=dtype)
 
-    regulariser = set_up_regulariser(config)
-    regulariser = regulariser.to(device=device, dtype=dtype)
+    image_filter = ImageFilter(config)
+    potential = StudentT(image_filter.get_num_filters(), config)
+    regulariser = FieldsOfExperts(potential, image_filter)
 
-    method_lower = 'nag'
-    options_lower = {'max_num_iterations': 1000, 'rel_tol': 1e-5}
-
-    bilevel_optimisation = BilevelOptimisation(torch.nn.Identity(), noise_level=0.1, method_lower=method_lower,
-                                               options_lower=options_lower)
-    lam = 0.5
-    func = lambda x, y: 0.5 * torch.sum((x - y) ** 2)
-    bilevel_optimisation.learn(regulariser, lam, func, train_image_dataset, test_image_dataset,
-                               optimisation_method_upper='nag', optimisation_options_upper={'max_num_iterations': 10})
-
-
-def train_bilevel_(config: Configuration):
-    device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    dtype = parse_datatype(config)
-
-    train_data_root_dir = config['data']['dataset']['train']['root_dir'].get()
-    train_image_dataset = TrainingImageDataset(root_path=train_data_root_dir, dtype=dtype)
-    batch_size = config['data']['dataset']['train']['batch_size'].get()
-    crop_size = config['data']['dataset']['train']['crop_size'].get()
-    train_loader = DataLoader(train_image_dataset, batch_size=batch_size,
-                              collate_fn=lambda x: collate_function(x, crop_size=crop_size))
-
-    test_data_root_dir = config['data']['dataset']['test']['root_dir'].get()
-    test_image_dataset = TestImageDataset(root_path=test_data_root_dir, dtype=dtype)
-    test_loader = DataLoader(test_image_dataset, batch_size=len(test_image_dataset), shuffle=False,
-                             collate_fn=lambda x: collate_function(x, crop_size=-1))
-
-    regulariser = set_up_regulariser(config)
-    regulariser = regulariser.to(device=device, dtype=dtype)
-    bilevel = set_up_bilevel_problem(regulariser.get_image_filter().parameters(),
-                                     regulariser.get_potential().parameters(), config)
-    bilevel = bilevel.to(device=device, dtype=dtype)
-
-    log_trainable_params_stats(regulariser, logging_module='train')
+    method_lower = 'napg'
+    options_lower = {'max_num_iterations': 300, 'rel_tol': 1e-5, 'lip_const': [1e5]}
     path_to_eval_dir = create_evaluation_dir(config)
+    bilevel_optimisation = BilevelOptimisation(method_lower, options_lower, config,
+                                               path_to_experiments_dir=path_to_eval_dir)
+    lam = config['energy']['lam'].get()
+    func = lambda x, y: 0.5 * torch.sum((x - y) ** 2)
 
-    logging.info('[TRAIN] compute initial test loss and initial psnr')
-    psnr, test_loss = evaluate_on_test_data(test_loader, regulariser, config, device,
-                                            dtype, -1, path_to_data_dir=None)
+    tb_writer = SummaryWriter(log_dir=os.path.join(path_to_eval_dir, 'tensorboard'))
+    callbacks = [PlotFiltersAndPotentials(path_to_data_dir=path_to_eval_dir, plotting_freq=2, tb_writer=tb_writer),
+                 SaveModel(path_to_data_dir=path_to_eval_dir, save_freq=2),
+                 TrainingMonitor(test_image_dataset, config, method_lower, options_lower, func, path_to_eval_dir,
+                                    evaluation_freq=2, tb_writer=tb_writer)]
 
-    train_loss_list = []
-    test_loss_list = [test_loss]
-    psnr_list = [psnr]
-
-    filters_list = []
-    potential_param_list = []
-
-    writer = SummaryWriter(log_dir=os.path.join(path_to_eval_dir, 'tensorboard'))
-
-    evaluation_freq = 2
-    max_num_iterations = 200
-    try:
-        for k, batch in enumerate(train_loader):
-
-            batch_ = batch.to(device=device, dtype=dtype)
-            with torch.no_grad():
-                measurement_model = set_up_measurement_model(batch_, config)
-                inner_energy = set_up_inner_energy(measurement_model, regulariser, config)
-                inner_energy = inner_energy.to(device=device, dtype=dtype)
-
-                outer_loss = set_up_outer_loss(batch_, config)
-                train_loss = bilevel.forward(outer_loss, inner_energy)
-
-                train_loss_list.append(train_loss.detach().cpu().item())
-                filter_tensor = regulariser.get_image_filter().get_filter_tensor().detach().clone()
-                filters_list.append(filter_tensor)
-                potential_params = regulariser.get_potential().get_parameters().detach().clone()
-                potential_param_list.append(potential_params)
-                logging.info('[TRAIN] iteration [{:d} / {:d}]: '
-                             'loss = {:.5f}'.format(k + 1, max_num_iterations, train_loss.detach().cpu().item()))
-
-                log_gradient_norms(regulariser, writer, k + 1)
-
-                if (k + 1) % evaluation_freq == 0:
-                    logging.info('[TRAIN] evaluate on test dataset')
-
-                    psnr, test_loss = evaluate_on_test_data(test_loader, regulariser, config, device,
-                                                            dtype, k, path_to_eval_dir)
-                    visualise_intermediate_results(regulariser, device, dtype, k, path_to_eval_dir)
-
-                    logging.info('[TRAIN] denoised test images')
-                    logging.info('[TRAIN]   > average psnr: {:.5f}'.format(psnr))
-                    logging.info('[TRAIN]   > test loss: {:.5f}'.format(test_loss))
-
-                    psnr_list.append(psnr)
-                    test_loss_list.append(test_loss)
-
-                    save_foe_model(regulariser, os.path.join(path_to_eval_dir, 'models'),
-                                   model_dir_name='model_{:s}'.format(str(k + 1).zfill(6)))
-
-                if (k + 1) == max_num_iterations:
-                    logging.info('[TRAIN] reached maximal number of iterations')
-                    writer.close()
-                    break
-                else:
-                    k += 1
-    finally:
-        save_foe_model(regulariser, os.path.join(path_to_eval_dir, 'models'), model_dir_name='final')
-
-        visualise_training_stats(train_loss_list, test_loss_list, psnr_list, evaluation_freq, path_to_eval_dir)
-        visualise_filter_stats(filters_list, path_to_eval_dir)
-
-        if type(regulariser.get_potential()).__name__ == 'StudentT':
-            visualise_student_t_training_stats(potential_param_list, path_to_eval_dir)
+    bilevel_optimisation.learn(regulariser, lam, func, train_image_dataset,
+                               optimisation_method_upper='nag',
+                               optimisation_options_upper={'max_num_iterations': 5, 'lip_const': [1, 1],
+                                                           'beta': [0.71, 0.71], 'alternating': True},
+                               dtype=dtype, device=device, callbacks=callbacks)
 
 def main():
     seed_random_number_generators(123)
@@ -187,7 +66,6 @@ def main():
     configuring_module = '[DENOISING] train'
     config = load_app_config(app_name, args.configs, configuring_module)
 
-    # train_bilevel(config)
     bilevel_learn(config)
 
 if __name__ == '__main__':

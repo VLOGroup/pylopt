@@ -1,56 +1,17 @@
-#regulariser:
-#  potential:
-#    name: 'StudentT'
-#    parameters:
-#      student_t:
-#        initialisation:
-#          name: 'uniform'
-#          multiplier: 0.000001
-#        trainable: True
-#  image_filter:
-#    padding_mode: 'reflect'
-#    initialisation:
-#      file: 'foe_filters_7x7_chen-ranftl-pock_2014_scaled.pt'
-#      multiplier: 1.0
-#    trainable: True
-#
-#inner_energy:
-#  type: 'OptimisationEnergy'
-#  lam: 0.1
-#  optimiser:
-#    name: 'NAGOptimiser'
-#    use_prox: True
-#    stopping:
-#      name: 'FixedIterationsStopping'
-#
-#bilevel:
-#  loss: 'L2Loss'
-#  optimiser:
-#    name: 'NAGOptimiser'
-#    parameters:
-#      beta: 0.71
-#      lip_const: 10000000
-#      param_groups:
-#        - params: 'potential'
-#          beta: 0.71
-#          lip_const: 10000000
-#        - params: 'filters'
-#          beta: 0.71
-#          lip_const: 10000
-
 image_filter:
   filter_dim: 7
   padding_mode: 'reflect'
-  initialisation: 'dct'
-  multiplier: 1.0
+  initialisation:
+    mode: 'randn'
+  multiplier: 5.0
   trainable: True
 
 potential:
   student_t:
-    multiplier: 0.000001
+    initialisation:
+      mode: 'uniform'
+    multiplier: 0.0001
     trainable: True
-    initialisation: 'uniform'
-    file_path: ''
 
 measurement_model:
   noise_level: 0.1
@@ -63,3 +24,6 @@ data:
       root_dir: '/home/florianthaler/Documents/data/image_data/BSDS300/images/train'
     test:
       root_dir: '/home/florianthaler/Documents/data/image_data/some_images'
+
+energy:
+  lam: 100

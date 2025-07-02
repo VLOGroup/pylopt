@@ -13,3 +13,5 @@ potential:
     initialisation:
       file_path: '/home/florianthaler/Documents/research/bilevel_optimisation/bilevel_optimisation/model_data/student_t_potential_thaler_2025.pt'
 
+energy:
+  lam: 0.5

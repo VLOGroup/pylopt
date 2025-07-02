@@ -1,5 +1,4 @@
 import torch
-from functools import cached_property
 from confuse import Configuration
 
 class MeasurementModel(torch.nn.Module):
@@ -43,18 +42,7 @@ class MeasurementModel(torch.nn.Module):
         return self.u_noisy
 
     def set_noisy_observation(self, noisy_obs: torch.Tensor):
-        self.obs_noisy.copy_(noisy_obs)
-
-    @cached_property
-    def obs_noisy(self) -> torch.nn.Parameter:
-        """
-        Returns the noisy observation by applying the forward operator to the clean data tensor and
-        adding random gaussian white noise.
-
-        :return: torch.nn.Parameter
-        """
-        obs_clean = self.operator(self.u_clean)
-        return torch.nn.Parameter(obs_clean + self.noise_level * torch.randn_like(obs_clean), requires_grad=False)
+        self.u_noisy.copy_(noisy_obs)
 
     def _data_fidelity(self, u: torch.Tensor) -> torch.Tensor:
         """
@@ -65,7 +53,7 @@ class MeasurementModel(torch.nn.Module):
         :param u: Tensor of the same shape as clean or noisy data tensor.
         :return: Scaled squared l2-norm in terms of a torch.Tensor.
         """
-        return 0.5 * torch.sum((u - self.obs_noisy) ** 2) / self.noise_level ** 2
+        return 0.5 * torch.sum((u - self.u_noisy) ** 2) / self.noise_level ** 2
 
     def forward(self, u: torch.Tensor) -> torch.Tensor:
         """

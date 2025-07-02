@@ -21,7 +21,6 @@ image_filter:
   multiplier: 1.0
   trainable: False
 
-
 potential:
   student_t:
     initialisation:

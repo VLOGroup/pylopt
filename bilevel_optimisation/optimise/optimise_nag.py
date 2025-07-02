@@ -23,7 +23,8 @@ def compute_momentum_parameter(param_group: Dict[str, Any]) -> float:
 def harmonise_param_groups_nag(param_groups: List[Dict[str, Any]], break_graph: bool=False) -> List[Dict[str, Any]]:
     param_groups_merged = []
     for group in param_groups:
-        group_ = {'history': [p.detach().clone() for p in group['params']]}
+        group_ = {'history': [p.detach().clone() for p in group['params']],
+                  'name': group.get('name', '')}
         if break_graph:
             group_['params'] = [p.detach().clone().requires_grad_(True) for p in group['params']]
         else:
@@ -117,7 +118,7 @@ def apply_backtracking(func: Callable, param_groups: List[Dict[str, Any]], group
         quadratic_approx = compute_quadratic_approximation(param_groups[group_idx], params_orig[group_idx],
                                                            group_grads, loss, lip_const)
 
-        if loss_new <= quadratic_approx:
+        if loss_new <= quadratic_approx * 1.01:
             param_groups[group_idx]['lip_const'] *= 0.9
             break
         else:
@@ -144,19 +145,18 @@ def compute_relative_error(param_groups: List[Dict[str, Any]]) -> torch.Tensor:
 
     return error # torch.sqrt(error) / (torch.sqrt(nrm) + EPSILON)
 
-def step_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]], in_place: bool=True) -> torch.Tensor:
+def step_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]],
+             alternating: bool=False, in_place: bool=True) -> torch.Tensor:
     params_flat = flatten_groups(param_groups)
     params_flat_ = [p.requires_grad_(True) for p in params_flat]
     loss = func(*params_flat_)
-    # with torch.enable_grad():
-    #
-
-    # grads = torch.autograd.grad(inputs=params_flat, outputs=loss)
+    if not alternating:
+        grads = grad_func(*params_flat)
 
     grad_idx = 0
     for group_idx, group in enumerate(param_groups):
-
-        grads = grad_func(*params_flat)
+        if alternating:
+            grads = grad_func(*params_flat)
 
         make_intermediate_step(group, in_place)
         group_grads = grads[grad_idx: grad_idx + len(group['params'])]

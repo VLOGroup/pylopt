@@ -23,32 +23,33 @@ def visualise_denoising_results(u_clean: torch.Tensor, u_noisy: torch.Tensor, u_
     u_clean_splits = torch.split(u_clean, split_size_or_sections=1, dim=0)
     u_noisy_splits = torch.split(u_noisy, split_size_or_sections=1, dim=0)
     u_denoised_splits = torch.split(u_denoised, split_size_or_sections=1, dim=0)
+
+    num_rows = len(u_clean_splits)
+    num_cols = 3
+    fig, axes = plt.subplots(num_rows, num_cols, figsize=(3 * num_cols, 3 * num_rows))
+    if num_rows == 1:
+        axes = [axes]
+
     for idx, (item_clean, item_noisy, item_denoised) in (
             enumerate(zip(u_clean_splits, u_noisy_splits, u_denoised_splits))):
         psnr = compute_psnr(item_clean, item_denoised)
         print(' > psnr [dB] = {:.5f}'.format(psnr.detach().cpu().item()))
 
-        fig = plt.figure()
-        ax_clean = fig.add_subplot(1, 3, 1)
-        ax_clean.imshow(item_clean.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
-        ax_clean.set_title('clean')
-        ax_clean.xaxis.set_visible(False)
-        ax_clean.yaxis.set_visible(False)
+        axes[idx][0].imshow(item_clean.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
+        axes[idx][1].imshow(item_noisy.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
+        axes[idx][2].imshow(item_denoised.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
 
-        ax_noisy = fig.add_subplot(1, 3, 2)
-        ax_noisy.imshow(item_noisy.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
-        ax_noisy.set_title('noisy')
-        ax_noisy.xaxis.set_visible(False)
-        ax_noisy.yaxis.set_visible(False)
+        axes[idx][0].axis('off')
+        axes[idx][1].axis('off')
+        axes[idx][2].axis('off')
 
-        ax_denoised = fig.add_subplot(1, 3, 3)
-        ax_denoised.imshow(item_denoised.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
-        ax_denoised.set_title('denoised')
-        ax_denoised.xaxis.set_visible(False)
-        ax_denoised.yaxis.set_visible(False)
+        if idx == 0:
+            axes[idx][0].set_title('clean')
+            axes[idx][1].set_title('noisy')
+            axes[idx][2].set_title('denoised')
 
-        plt.show()
-        plt.close(fig)
+    plt.show()
+    plt.close(fig)
 
 def denoise(config: Configuration):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -66,18 +67,21 @@ def denoise(config: Configuration):
     u_clean = list(test_loader)[0]
     u_clean = u_clean.to(device=device, dtype=dtype)
     measurement_model = MeasurementModel(u_clean, config)
-    lam = 0.5
+    lam = config['energy']['lam'].get()
     energy = Energy(measurement_model, regulariser, lam)
     energy.to(device=device, dtype=dtype)
 
     options_adam = {'max_num_iterations': 1000, 'rel_tol': 1e-4, 'lr': [1e-3, 1e-4], 'batch_optimisation': False}
-    options_nag = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.71, 0.87], 'batch_optimisation': False}
-    options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-5}
+    options_nag = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.71], 'batch_optimisation': True}
+    # options_nag = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.71, 0.87], 'batch_optimisation': False}
+    options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.9], 'alpha': [0.0001]}
+    # options_napg = {'max_num_iterations': 300, 'rel_tol': 1e-17, 'beta': [0.9], 'lip_const': [2 ** 10]}
     options_nag_unrolling = {'max_num_iterations': 10, 'rel_tol': 1e-5, 'alpha': [1e-3, 1e-7], 'batch_optimisation': False}
     # options_nag_unrolling = {'max_num_iterations': 10, 'rel_tol': 1e-5, 'lip_const': [1e4]}
 
     with Timer(device=device) as t:
-        lower_prob_result = solve_lower(energy=energy, method='nag_unrolling', options=options_nag_unrolling)
+        # lower_prob_result = solve_lower(energy=energy, method='nag', options=options_nag)
+        lower_prob_result = solve_lower(energy=energy, method='napg', options=options_napg)
 
     print('denoising stats:')
     print(' > elapsed time [ms] = {:.5f}'.format(t.time_delta()))

@@ -1,8 +1,6 @@
 import os
 import logging
 import torch
-from confuse import Configuration
-from torch.utils.tensorboard import SummaryWriter
 
 from bilevel_optimisation.data.LogLevel import LogLevel
 
@@ -21,15 +19,3 @@ def log_trainable_params_stats(model: torch.nn.Module, logging_module: str) -> N
     logging.info('[{:s}] parameter stats'.format(logging_module.upper()))
     logging.info('[{:s}]   > total number of parameters: {:d}'.format(logging_module.upper(), num_params_total))
     logging.info('[{:s}]   > trainable parameters: {:d}'.format(logging_module.upper(), num_params_trainable))
-
-def log_gradient_norms(model: torch.nn.Module, writer: SummaryWriter, curr_iteration_idx: int):
-    for name, param in model.named_parameters():
-        if param.grad is not None:
-            if name == 'filters':
-                for k in range(0, param.shape[0]):
-                    writer.add_scalar('grad_norms/{:s}/index_{:d}'.format(name, k),
-                                      torch.linalg.norm(param[k, :, :, :]), curr_iteration_idx)
-            if name == 'potential.log_weights':
-                for k in range(0, param.shape[0]):
-                    writer.add_scalar('grad_norms/{:s}/index_{:d}'.format(name, k),
-                                      torch.linalg.norm(param[k, :]), curr_iteration_idx)
