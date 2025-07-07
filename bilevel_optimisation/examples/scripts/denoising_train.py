@@ -29,9 +29,10 @@ def bilevel_learn(config: Configuration):
     regulariser = FieldsOfExperts(potential, image_filter)
 
     method_lower = 'napg'
-    options_lower = {'max_num_iterations': 300, 'rel_tol': 1e-5, 'lip_const': [1e5]}
+    options_lower = {'max_num_iterations': 100, 'rel_tol': 1e-5, 'lip_const': [1e5]}
     path_to_eval_dir = create_evaluation_dir(config)
-    bilevel_optimisation = BilevelOptimisation(method_lower, options_lower, config,
+    bilevel_optimisation = BilevelOptimisation(method_lower, options_lower, config, solver='cg',
+                                               options_solver={'max_num_iterations': 500},
                                                path_to_experiments_dir=path_to_eval_dir)
     lam = config['energy']['lam'].get()
     func = lambda x, y: 0.5 * torch.sum((x - y) ** 2)
@@ -42,11 +43,27 @@ def bilevel_learn(config: Configuration):
                  TrainingMonitor(test_image_dataset, config, method_lower, options_lower, func, path_to_eval_dir,
                                     evaluation_freq=2, tb_writer=tb_writer)]
 
+    # bilevel_optimisation.learn(regulariser, lam, func, train_image_dataset,
+    #                            optimisation_method_upper='nag',
+    #                            optimisation_options_upper={'max_num_iterations': 500, 'lip_const': [1, 1],
+    #                                                        'beta': [0.71, 0.71], 'alternating': True,
+    #                                                        'max_num_backtracking_iterations': 20},
+    #                            dtype=dtype, device=device, callbacks=callbacks)
+
     bilevel_optimisation.learn(regulariser, lam, func, train_image_dataset,
-                               optimisation_method_upper='nag',
-                               optimisation_options_upper={'max_num_iterations': 5, 'lip_const': [1, 1],
-                                                           'beta': [0.71, 0.71], 'alternating': True},
+                               optimisation_method_upper='adam',
+                               optimisation_options_upper={'max_num_iterations': 5000, 'lr': [1e-3, 1e-1],
+                                                           'parameterwise': True},
                                dtype=dtype, device=device, callbacks=callbacks)
+
+
+    # callbacks = [PlotFiltersAndPotentials(path_to_data_dir=path_to_eval_dir, plotting_freq=2, tb_writer=tb_writer)]
+    # bilevel_optimisation.learn(regulariser, lam, func, train_image_dataset,
+    #                            optimisation_method_upper='debug',
+    #                            optimisation_options_upper={'max_num_iterations': 5000, 'lip_const': [1, 1],
+    #                                                        'beta': [0.71, 0.71], 'alternating': True,
+    #                                                        'max_num_backtracking_iterations': 20},
+    #                            dtype=dtype, device=device, callbacks=callbacks)
 
 def main():
     seed_random_number_generators(123)

@@ -130,20 +130,15 @@ def apply_backtracking(func: Callable, param_groups: List[Dict[str, Any]], group
             for p, p_orig in zip(param_groups[group_idx]['params'], params_orig[group_idx]):
                 p.copy_(p_orig)
 
-
 def compute_relative_error(param_groups: List[Dict[str, Any]]) -> torch.Tensor:
     error = 0.0
-    nrm = 0.0
+    n = 0
     for group in param_groups:
         for p, p_old in zip(group['params'], group['history']):
-            error += torch.sum((p - p_old) ** 2)
-            nrm += torch.sum(p_old ** 2)
-
-            error = torch.linalg.norm(p - p_old)
-
-    # TODO: fix me/clean me up
-
-    return error # torch.sqrt(error) / (torch.sqrt(nrm) + EPSILON)
+            n += p.shape[0]
+            error += torch.sum(torch.sqrt(torch.sum((p - p_old) ** 2, dim=(-2, -1)))
+                               / torch.sqrt(torch.sum(p_old ** 2, dim=(-2, -1)) + EPSILON))
+    return error / n
 
 def step_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]],
              alternating: bool=False, in_place: bool=True) -> torch.Tensor:
@@ -178,8 +173,7 @@ def optimise_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[st
     param_groups_ = harmonise_param_groups_nag(param_groups)
 
     for k in range(0, max_num_iterations):
-        l = step_nag(func, grad_func, param_groups_)
-
+        _ = step_nag(func, grad_func, param_groups_)
 
         if rel_tol:
             rel_error = compute_relative_error(param_groups_)

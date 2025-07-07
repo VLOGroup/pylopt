@@ -25,14 +25,26 @@ def add_group_options(param_groups: List[Dict[str, Any]], group_options: Dict[st
             if values[group_idx]:
                 group[key] = values[group_idx]
 
-def add_prox(param_groups: List[Dict[str, Any]], u: torch.Tensor, energy: Energy) -> None:
-    u_ = u.detach().clone()
-    prox_map = lambda x, tau: (((tau / energy.measurement_model.noise_level ** 2) * u_ + x)
-                               / (1 + (tau / energy.measurement_model.noise_level ** 2)))
+def make_prox_map(u: torch.Tensor, noise_level: float) -> Callable:
+    def prox_map(x: torch.Tensor, tau: float) -> torch.Tensor:
+        return ((tau / noise_level ** 2) * u + x) / (1 + (tau / noise_level ** 2))
+    return prox_map
 
-    for group in param_groups:
-        for p in group['params']:
-            setattr(p, 'prox', prox_map)
+def add_prox(param_groups: List[Dict[str, Any]], u: torch.Tensor, energy: Energy,
+             batch_optimisation: bool) -> None:
+    u_ = u.detach().clone()
+    if batch_optimisation:
+        prox_map = make_prox_map(u_, energy.measurement_model.noise_level)
+
+        for group in param_groups:
+            for p in group['params']:
+                setattr(p, 'prox', prox_map)
+    else:
+        for idx, group in enumerate(param_groups):
+            v = u_[idx: idx + 1, :, :, :].detach().clone()
+            for p in group['params']:
+                prox_map = make_prox_map(v, energy.measurement_model.noise_level)
+                setattr(p, 'prox', prox_map)
 
 def assemble_param_groups_nag(u: torch.Tensor, alpha: List[Optional[float]]=None,
                               beta: List[Optional[float]]=None,
@@ -123,7 +135,7 @@ def solve_lower(energy: Energy, method: str,
         func = build_objective_func(energy, batch_optim=batch_optim, use_prox=True)
         grad_func = build_gradient_func(func, batch_optim=batch_optim)
         param_groups = assemble_param_groups_nag(u_, **options)
-        add_prox(param_groups, u_, energy)
+        add_prox(param_groups, u_, energy, batch_optim)
 
         nag_result = optimise_nag(func, grad_func, param_groups, **options)
         lower_prob_result = parse_result(nag_result, **options)
@@ -147,7 +159,7 @@ def solve_lower(energy: Energy, method: str,
         func = build_objective_func(energy, batch_optim=batch_optim, use_prox=True)
         grad_func = build_gradient_func(func, batch_optim)
         param_groups = assemble_param_groups_nag(u_, **options)
-        add_prox(param_groups, u_, energy)
+        add_prox(param_groups, u_, energy, batch_optim)
 
         nag_result = optimise_nag_unrolling(func, grad_func, param_groups, **options)
         lower_prob_result = parse_result(nag_result, **options)

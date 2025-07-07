@@ -40,8 +40,8 @@ def assemble_param_groups_base(regulariser: FieldsOfExperts, alternating: bool=F
 def assemble_param_groups_adam(regulariser: FieldsOfExperts, lr: List[Optional[float]]=None,
                                betas: List[Optional[Tuple[float, float]]]=None, eps: List[Optional[float]]=None,
                                weight_decay: List[Optional[float]]=None,
-                               single_group_optimisation: bool=True, **unknown_options) -> List[Dict[str, Any]]:
-    param_groups = assemble_param_groups_base(regulariser, single_group_optimisation)
+                               parameterwise: bool=True, **unknown_options) -> List[Dict[str, Any]]:
+    param_groups = assemble_param_groups_base(regulariser, parameterwise)
 
     lr = [None for _ in range(0, len(param_groups))] if not lr else lr
     betas = [None for _ in range(0, len(param_groups))] if not betas else betas
@@ -63,7 +63,6 @@ def assemble_param_groups_nag(regulariser: FieldsOfExperts, alpha: List[Optional
     add_group_options(param_groups, {'alpha': alpha, 'beta': beta, 'lip_const': lip_const})
 
     return param_groups
-
 
 class BilevelOptimisation:
     def __init__(self, method_lower: str, options_lower: Dict[str, Any], config: Configuration,
@@ -114,6 +113,8 @@ class BilevelOptimisation:
         if optimisation_method_upper == 'nag':
             self._learn_nag(regulariser, lam, upper_loss_func, optimisation_options_upper, train_loader,
                             dtype, device, callbacks)
+        elif optimisation_method_upper == 'debug':
+            self._learn_debug(regulariser, lam, train_loader, optimisation_method_upper, optimisation_options_upper, dtype, device, callbacks)
         elif optimisation_method_upper == 'adam':
             self._learn_adam(regulariser, lam, upper_loss_func, optimisation_options_upper, train_loader,
                             dtype, device, callbacks)
@@ -121,6 +122,137 @@ class BilevelOptimisation:
             pass
         else:
             raise NotImplementedError
+
+
+    def _compute_grads(self, energy, denoised, lagrange, thetas, filters):
+        with torch.enable_grad():
+            denoised.requires_grad_(True)
+            foe = energy.lam * energy.regulariser(denoised)
+            grad_foe = torch.autograd.grad(foe, denoised, create_graph=True)[0]
+        foe_grad_params = torch.autograd.grad(grad_foe, [thetas, filters], lagrange)
+
+        return foe_grad_params
+
+    def _learn_debug(self, regulariser: FieldsOfExperts, lam, train_loader, optimisation_method_upper: str,
+                     optimisation_options_upper: Dict[str, Any], dtype, device, callbacks):
+
+        regulariser = regulariser.to(device=device, dtype=dtype)
+        param_groups = assemble_param_groups_nag(regulariser, **optimisation_options_upper)
+        param_groups_ = harmonise_param_groups_nag(param_groups)
+
+        thetas = regulariser.get_potential().get_parameters()
+        filters = regulariser.get_image_filter().get_filter_tensor()
+
+        L_thetas = 1
+        L_filters = 1
+
+        for cb in callbacks:
+            cb.on_train_begin(regulariser, device=device, dtype=dtype)
+
+        with torch.no_grad():
+            for k, batch in enumerate(train_loader):
+                ###################################################
+                ### 1. Update thetas
+
+                batch_ = batch.to(dtype=dtype, device=device)
+
+                measurement_model = MeasurementModel(batch_, self.config)
+                energy = Energy(measurement_model, regulariser, lam)
+                energy = energy.to(device=device, dtype=dtype)
+
+
+
+                denoised = solve_lower(energy, self.method_lower, self.options_lower).solution
+                # foe_apgd(denoised, noisy, thetas, filters, verbose=0, maxit=apgd_it)
+
+                # 2. solve for the Lagrange multipliers, initialize with the rhs
+                lagrange = compute_lagrange_multiplier(lambda z: 0.5 * torch.sum((z - batch_) ** 2),
+                                                       energy, denoised, self.solver)
+                # CG(clean - denoised, compute_foe_hess_lag, denoised, thetas,
+                #               filters, clean - denoised, maxit=cg_it)
+
+                # 3. compute gradient for filters, thetas
+                # grad_thetas, grad_filters = self._compute_grads(energy, denoised, lagrange, thetas, filters) # compute_foe_grad_params(denoised, thetas,
+                #                                                     filters, lagrange)
+
+                grad_thetas, grad_filters = compute_hvp_mixed(energy, denoised.detach(), lagrange)
+
+                thetas_old = thetas.detach().clone()
+                filters_old = filters.detach().clone()
+                loss = 0.5 * torch.sum((batch_ - denoised) ** 2)
+
+                for bt in range(20):
+                    # gradient descent
+                    # thetas_new = thetas - 1 / L_thetas * grad_thetas
+                    thetas.sub_(1 / L_thetas * grad_thetas)
+
+                    # 1. solve for \nabla_u E(u)=0
+                    denoised_new = solve_lower(energy, self.method_lower, self.options_lower).solution
+
+                    loss_new = 0.5 * torch.sum((batch_ - denoised_new) ** 2)
+
+                    quad = loss + (grad_thetas * (thetas - thetas_old)).sum() + \
+                           L_thetas / 2.0 * ((thetas - thetas_old) ** 2).sum()
+
+                    if loss_new <= 1.01 * quad:
+                        L_thetas = L_thetas / 1.1
+                        break
+                    else:
+                        L_thetas = L_thetas * 2.0
+                        thetas.copy_(thetas_old)
+
+
+                ###################################################
+                ### 2. Update filters
+
+                # 1. solve for \nabla_u E(u)=0
+                denoised = solve_lower(energy, self.method_lower, self.options_lower).solution
+
+                # 2. solve for the Lagrange multipliers, initialize with the rhs
+                lagrange = compute_lagrange_multiplier(lambda z: 0.5 * torch.sum((z - batch_) ** 2),
+                                                       energy, denoised, self.solver)
+
+                # 3. compute gradient for filters, thetas
+                grad_thetas, grad_filters = compute_hvp_mixed(energy, denoised.detach(), lagrange)
+
+                loss = 0.5 * torch.sum((batch_ - denoised) ** 2)
+
+                for bt in range(20):
+
+                    # gradient descent
+                    filters.sub_(1 / L_filters * grad_filters)
+                    filters.sub_(torch.mean(filters, axis=(2, 3), keepdims=True))
+
+
+                    # 1. solve for \nabla_u E(u)=0
+                    denoised_new = solve_lower(energy, self.method_lower, self.options_lower).solution
+
+                    loss_new = 0.5 * torch.sum((batch_ - denoised_new) ** 2)
+
+                    quad = loss + (grad_filters * (filters - filters_old)).sum() + \
+                           L_filters / 2.0 * ((filters - filters_old) ** 2).sum()
+
+                    if loss_new <= 1.01 * quad:
+                        L_filters = L_filters / 1.1
+                        break
+                    else:
+                        L_filters = L_filters * 2.0
+                        filters.copy_(filters_old)
+
+                for cb in callbacks:
+                    cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)
+
+                print("iter = ", k,
+                      ", L_thetas = ", "{:3.3f}".format(L_thetas),
+                      ", L_filters = ", "{:3.3f}".format(L_filters),
+                      ", Loss = ", "{:3.6f}".format(loss.detach().cpu().numpy()),
+                      ", PSNR = ", self.psnr(denoised.cpu().numpy(), batch_.cpu().numpy()),
+                      end="\n")
+
+    @staticmethod
+    def psnr(u, g):
+        import numpy as np
+        return 20 * np.log10(1.0 / np.sqrt(np.mean((u - g) ** 2)))
 
     def _learn_nag(self, regulariser: FieldsOfExperts, lam: float, upper_loss: Callable,
                    optimisation_options_upper: Dict[str, Any], train_loader: torch.utils.data.DataLoader,
@@ -136,13 +268,6 @@ class BilevelOptimisation:
 
        max_num_iterations = optimisation_options_upper['max_num_iterations']
        jacobian_free = optimisation_options_upper.get('jacobian_free', False)
-
-                   # params = [p for p in regulariser.parameters() if p.requires_grad]
-                   # theta = params[0]
-                   # filters = params[1]
-                   # theta_old = theta.detach().clone()
-                   # filters_old = filters.detach().clone()
-                   # lip_const = 100
 
        try:
            for k, batch in enumerate(train_loader):
@@ -163,70 +288,17 @@ class BilevelOptimisation:
                    for cb in callbacks:
                        cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)
 
-                   # ##########################################
-
-                   # theta_curr = theta.detach().clone()
-                   # theta.add_(0.71 * (theta - theta_old))
-                   # theta_inter = theta.detach().clone()
-                   # theta_old = theta_curr.detach().clone()
-                   #
-                   # denoised = solve_lower(energy, self.method_lower, self.options_lower).solution
-                   #
-                   # lagrange = compute_lagrange_multiplier(lambda z: upper_loss_func(z, batch_), energy, denoised, self.solver)
-                   # grads = compute_hvp_mixed(energy, denoised, lagrange)[0]
-                   # theta.sub_(1e-2 * grads)
-                   #
-                   #
-                   # filters_curr = filters.detach().clone()
-                   # filters.add_(0.71 * (filters - filters_old))
-                   # filters_inter = filters.detach().clone()
-                   # filters_old = filters_curr.detach().clone()
-                   #
-                   # denoised = solve_lower(energy, self.method_lower, self.options_lower).solution
-                   # lagrange = compute_lagrange_multiplier(lambda z: upper_loss_func(z, batch_), energy, denoised,
-                   #                                        self.solver)
-                   # grads = compute_hvp_mixed(energy, denoised, lagrange)[1]
-                   # filters.sub_(1e-2 * grads)
-                   #
-                   # loss = 0.5 * torch.sum((denoised - batch_) ** 2)
-
-
-
-                   #
-                   #
-                   #
-                   #
-                   # loss = upper_loss_func(denoised, batch_)
-                   # for l in range(0, 20):
-                   #     step_size = 1 / lip_const
-                   #     # for p in [p_ for p_ in energy.parameters() if p_.requires_grad]:
-                   #     #     p.sub_(step_size * grads)
-                   #     theta.sub_(step_size * grads)
-                   #
-                   #     denoised_new = solve_lower(energy, self.method_lower, self.options_lower).solution
-                   #     loss_new = upper_loss_func(denoised_new, batch_)
-                   #     quadr_approx = loss + torch.sum(grads * (theta - theta_inter)) + 0.5 * lip_const * torch.sum((theta - theta_inter) ** 2)
-                   #     if loss_new <= quadr_approx:
-                   #         lip_const *= 0.9
-                   #         break
-                   #     else:
-                   #         lip_const *= 2.0
-                   #         theta.copy_(theta_inter)
-                   #
-                   # print(lip_const)
-
-                   #
-                   # for p in [p_ for p_ in energy.parameters() if p_.requires_grad]:
-                   #     p.sub_(1e-1 * grads)
-                   #     # p.copy_(torch.clamp(p, min=1e-7))
-
-                   # loss = upper_loss_func(denoised, batch_)
-
                    logging.info('[TRAIN] iteration [{:d} / {:d}]: '
                                 'loss = {:.5f}'.format(k + 1, max_num_iterations, loss.detach().cpu().item()))
 
-                   for cb in callbacks:
-                       cb.on_step(k + 1, regulariser=regulariser, loss=loss, device=device, dtype=dtype)
+                   for group in param_groups_:
+                       if group['lip_const'] > 1e6:
+                           group['theta'] = 0
+                           group['lip_const'] = 1
+                           group['history'] = [p.detach().clone() for p in group['params']]
+                           for p in group['params']:
+                               p.add_(1e-5 * torch.randn_like(p))
+
 
                if (k + 1) == max_num_iterations:
                    logging.info('[TRAIN] reached maximal number of iterations')
@@ -237,79 +309,77 @@ class BilevelOptimisation:
            for cb in callbacks:
                cb.on_train_end()
 
-    def _learn_adam(self, regulariser: FieldsOfExperts, lam: float, upper_loss_func: Callable,
+    def _learn_adam(self, regulariser: FieldsOfExperts, lam: float, upper_loss: Callable,
                     optimisation_options_upper: Dict[str, Any], train_loader: torch.utils.data.DataLoader,
-                    test_loader: torch.utils.data.DataLoader, evaluation_freq: int,
-                    dtype: torch.dtype, device: torch.device):
+                    dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None):
         param_groups = assemble_param_groups_adam(regulariser, **optimisation_options_upper)
         param_groups_ = harmonise_param_groups_adam(param_groups)
 
         optimiser = create_projected_optimiser(torch.optim.Adam)(param_groups_)
 
         max_num_iterations = optimisation_options_upper['max_num_iterations']
+        for cb in callbacks:
+            cb.on_train_begin(regulariser, device=device, dtype=dtype)
 
-        for k, batch in enumerate(train_loader):
-            with torch.no_grad():
-                batch_ = batch.to(dtype=dtype, device=device)
+        try:
+            for k, batch in enumerate(train_loader):
+                with torch.no_grad():
+                    batch_ = batch.to(dtype=dtype, device=device)
 
-                measurement_model = MeasurementModel(batch_, self.forward_operator, self.noise_level)
-                energy = Energy(measurement_model, regulariser, lam)
-                energy = energy.to(device=device, dtype=dtype)
+                    measurement_model = MeasurementModel(batch_, self.config)
+                    energy = Energy(measurement_model, regulariser, lam)
+                    energy = energy.to(device=device, dtype=dtype)
 
-                u_noisy = energy.measurement_model.obs_noisy
-                u_denoised = solve_lower(u_noisy, energy, self.method_lower, self.options_lower).solution
+                    func = self._loss_func_factory(upper_loss, energy, batch_)
+                    loss = step_adam(optimiser, func, param_groups_)
 
-                autograd_func = self._loss_func_factory(upper_loss_func, energy, batch_, u_denoised)
-                loss_train = step_adam(optimiser, autograd_func, param_groups_)
+                    for cb in callbacks:
+                        cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)
 
-                self.writer.add_scalar('loss/train', loss_train, k + 1)
-                logging.info('[TRAIN] iteration [{:d} / {:d}]: '
-                             'loss = {:.5f}'.format(k + 1, max_num_iterations, loss_train.detach().cpu().item()))
+                    logging.info('[TRAIN] iteration [{:d} / {:d}]: '
+                                 'loss = {:.5f}'.format(k + 1, max_num_iterations, loss.detach().cpu().item()))
 
-            if (k + 1) % evaluation_freq == 0:
-                psnr, loss_test = self.evaluate(regulariser, lam, test_loader, upper_loss_func, dtype, device, k)
-                logging.info('[TRAIN] inference on test images')
-                logging.info('[TRAIN]   > average psnr: {:.5f}'.format(psnr.detach().cpu().item()))
-                logging.info('[TRAIN]   > test loss: {:.5f}'.format(loss_test.detach().cpu().item()))
-
-            if (k + 1) == optimisation_options_upper['max_num_iterations']:
-                logging.info('[TRAIN] reached maximal number of iterations')
-                break
-            else:
-                k += 1
+                if (k + 1) == optimisation_options_upper['max_num_iterations']:
+                    logging.info('[TRAIN] reached maximal number of iterations')
+                    break
+                else:
+                    k += 1
+        finally:
+            for cb in callbacks:
+                cb.on_train_end()
 
 
-# def compute_lagrange_multiplier(outer_loss_func: torch.nn.Module, energy: Energy,
-#                                 x_denoised: torch.Tensor, solver) -> torch.Tensor:
-#
-#     with torch.enable_grad():
-#         x_ = x_denoised.detach().clone()
-#         x_.requires_grad = True
-#         outer_loss = outer_loss_func(x_)
-#     grad_outer_loss = torch.autograd.grad(outputs=outer_loss, inputs=x_)[0]
-#
-#     lin_operator = lambda z: compute_hvp_state(energy, x_denoised, z)
-#     lagrange_multiplier_result = solver.solve(lin_operator, -grad_outer_loss)
-#     return lagrange_multiplier_result.solution
-#
-#     # return -grad_outer_loss
-#
-# def compute_hvp_state(energy: Energy, u: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
-#     with torch.enable_grad():
-#         x = u.detach().clone()
-#         x.requires_grad = True
-#
-#         e = energy(x)
-#         de_dx = torch.autograd.grad(inputs=x, outputs=e, create_graph=True)
-#     return torch.autograd.grad(inputs=x, outputs=de_dx[0], grad_outputs=v)[0]
-#
-# def compute_hvp_mixed(energy: Energy, u: torch.Tensor, v: torch.Tensor) -> List[torch.Tensor]:
-#     with torch.enable_grad():
-#         x = u.detach().clone()
-#         x.requires_grad = True
-#
-#         e = energy(x)
-#         de_dx = torch.autograd.grad(inputs=x, outputs=e, create_graph=True)
-#     d2e_mixed = torch.autograd.grad(inputs=[p for p in energy.parameters() if p.requires_grad],
-#                                     outputs=de_dx, grad_outputs=v)
-#     return list(d2e_mixed)
+def compute_lagrange_multiplier(outer_loss_func: torch.nn.Module, energy: Energy,
+                                x_denoised: torch.Tensor, solver) -> torch.Tensor:
+
+    with torch.enable_grad():
+        x_ = x_denoised.detach().clone()
+        x_.requires_grad = True
+        outer_loss = outer_loss_func(x_)
+    grad_outer_loss = torch.autograd.grad(outputs=outer_loss, inputs=x_)[0]
+
+    lin_operator = lambda z: compute_hvp_state(energy, x_denoised, z)
+    lagrange_multiplier_result = solver.solve(lin_operator, -grad_outer_loss)
+    return lagrange_multiplier_result.solution
+
+    # return -grad_outer_loss
+
+def compute_hvp_state(energy: Energy, u: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
+    with torch.enable_grad():
+        x = u.detach().clone()
+        x.requires_grad = True
+
+        e = energy(x)
+        de_dx = torch.autograd.grad(inputs=x, outputs=e, create_graph=True)
+    return torch.autograd.grad(inputs=x, outputs=de_dx[0], grad_outputs=v)[0]
+
+def compute_hvp_mixed(energy: Energy, u: torch.Tensor, v: torch.Tensor) -> List[torch.Tensor]:
+    with torch.enable_grad():
+        x = u.detach().clone()
+        x.requires_grad = True
+
+        e = energy(x)
+        de_dx = torch.autograd.grad(inputs=x, outputs=e, create_graph=True)
+    d2e_mixed = torch.autograd.grad(inputs=[p for p in energy.parameters() if p.requires_grad],
+                                    outputs=de_dx, grad_outputs=v)
+    return list(d2e_mixed)
