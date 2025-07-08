@@ -1,4 +1,4 @@
-from typing import Callable, Any, List
+from typing import Callable, Any, List, Dict
 import torch
 from torch.autograd import Function
 from torch.autograd.function import FunctionCtx
@@ -45,15 +45,16 @@ class OptimisationAutogradFunction(Function):
     """
 
     @staticmethod
-    def forward(ctx: FunctionCtx, energy: Energy, method_lower, options_lower, loss_func: torch.nn.Module,
-                solver: LinearSystemSolver, *params) -> torch.Tensor:
+    def forward(ctx: FunctionCtx, energy: Energy, method_lower: str, options_lower: Dict[str, Any],
+                loss_func: torch.nn.Module, solver: LinearSystemSolver, *params: torch.nn.Parameter) -> torch.Tensor:
         """
         Function which needs to be implemented due to subclassing from torch.autograd.Function.
         It computes and provides data which is required in the backward step.
 
         :param ctx:
         :param energy:
-        :param denoising_func:
+        :param method_lower:
+        :param options_lower:
         :param loss_func: PyTorch module representing the outer loss function
         :param solver: Linear system solver of class LinearSystemSolver
         :param params: List of PyTorch parameters whose gradients need to be computed.
@@ -70,7 +71,7 @@ class OptimisationAutogradFunction(Function):
 
     @staticmethod
     def compute_lagrange_multiplier(outer_loss_func: torch.nn.Module, energy: Energy,
-                                    x_denoised: torch.Tensor, solver: LinearSystemSolver) -> torch.Tensor:
+                                    u_denoised: torch.Tensor, solver: LinearSystemSolver) -> torch.Tensor:
         """
         Function which computes the Lagrange multiplier of the KKT-formulation of the bilevel problem.
         The Lagrange multiplier is required for the computation of the gradients of the outer loss w.r.t. to
@@ -78,17 +79,17 @@ class OptimisationAutogradFunction(Function):
 
         :param outer_loss_func: PyTorch module representing the outer loss
         :param energy: PyTorch module representing the inner problem
-        :param x_denoised: Result of denoising procedure
+        :param u_denoised: Result of denoising procedure
         :param solver: Linear system solver
         :return: Solution of linear system
         """
         with torch.enable_grad():
-            x_ = x_denoised.detach().clone()
-            x_.requires_grad = True
-            outer_loss = outer_loss_func(x_)
-        grad_outer_loss = torch.autograd.grad(outputs=outer_loss, inputs=x_)[0]
+            x = u_denoised.detach().clone()
+            x.requires_grad = True
+            outer_loss = outer_loss_func(x)
+        grad_outer_loss = torch.autograd.grad(outputs=outer_loss, inputs=x)[0]
 
-        lin_operator = lambda z: compute_hvp_state(energy, x_denoised, z)
+        lin_operator = lambda z: compute_hvp_state(energy, u_denoised, z)
         lagrange_multiplier_result = solver.solve(lin_operator, -grad_outer_loss)
 
         return lagrange_multiplier_result.solution
@@ -129,18 +130,16 @@ class UnrollingAutogradFunction(Function):
     function based on an unrolling scheme.
     """
     @staticmethod
-    def forward(ctx: FunctionCtx, energy: Energy, denoising_func: Callable,
+    def forward(ctx: FunctionCtx, energy: Energy, method_lower: str, options_lower: Dict[str, Any],
                 loss_func: torch.nn.Module, *params) -> torch.Tensor:
-        x_noisy = energy.measurement_model.obs_noisy.detach().clone()
-        x_noisy.requires_grad = True
-        x_denoised = denoising_func(x_noisy)
 
         with torch.enable_grad():
-            loss = loss_func(x_denoised)
-        grad_params = torch.autograd.grad(outputs=loss, inputs=[p for p in energy.parameters() if p.requires_grad])
+            u_denoised = solve_lower(energy, method_lower, options_lower).solution
+            loss = loss_func(u_denoised)
+        grad_params = torch.autograd.grad(outputs=loss, inputs=params)
 
         ctx.grad_params = grad_params
-        ctx.inner_energy = energy
+        ctx.energy = energy
         return loss
 
     @staticmethod
@@ -149,4 +148,4 @@ class UnrollingAutogradFunction(Function):
         energy = ctx.energy
         energy.zero_grad()
 
-        return None, None, None, *grad_params
+        return None, None, None, None, *grad_params

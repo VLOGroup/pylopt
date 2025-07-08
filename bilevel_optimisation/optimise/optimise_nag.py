@@ -6,7 +6,7 @@ from bilevel_optimisation.data import OptimiserResult
 from bilevel_optimisation.data.Constants import EPSILON, MAX_NUM_ITERATIONS_DEFAULT
 
 DEFAULTS = {'alpha': None, 'beta': None, 'theta': 0.0, 'lip_const': 1e5,
-            'max_num_backtracking_iterations': 10, 'proj': None, 'prox': None}
+            'max_num_backtracking_iterations': 10}
 
 def compute_momentum_parameter(param_group: Dict[str, Any]) -> float:
     if param_group['beta']:
@@ -29,10 +29,6 @@ def harmonise_param_groups_nag(param_groups: List[Dict[str, Any]], break_graph: 
             group_['params'] = [p.detach().clone().requires_grad_(True) for p in group['params']]
         else:
             group_['params'] = [p for p in group['params']]
-
-            # TODO:
-            #   > check if detaching and cloning is needed in some of the applications ...
-            # group_['params'] = [p.detach().clone().requires_grad_(True) for p in group['params']]
 
         for key, value in DEFAULTS.items():
             group_[key] = group.get(key, value)
@@ -123,10 +119,6 @@ def apply_backtracking(func: Callable, param_groups: List[Dict[str, Any]], group
             break
         else:
             param_groups[group_idx]['lip_const'] *= 2.0
-
-            # TODO: this may break for unrolling!!!
-            # param_groups[group_idx]['params'] = [p_orig.detach().clone().requires_grad_(True)
-            #                                      for p_orig in param_groups_orig[group_idx]['params']]
             for p, p_orig in zip(param_groups[group_idx]['params'], params_orig[group_idx]):
                 p.copy_(p_orig)
 

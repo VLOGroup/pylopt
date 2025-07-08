@@ -98,19 +98,19 @@ def build_objective_func(energy: Energy, batch_optim: bool, use_prox: bool) -> C
             return energy.lam * energy.regulariser(torch.cat(x, dim=0))
     return func
 
-def build_gradient_func(func: Callable, batch_optim: bool) -> Callable:
+def build_gradient_func(func: Callable, batch_optim: bool, unrolling: bool=False) -> Callable:
     if batch_optim:
         def grad_func(x: torch.Tensor) -> List[torch.Tensor]:
             with torch.enable_grad():
                 x_ = x.detach().clone().requires_grad_(True)
                 loss = func(x_)
-            return list(torch.autograd.grad(outputs=loss, inputs=[x_]))
+            return list(torch.autograd.grad(outputs=loss, inputs=[x_], create_graph=unrolling))
     else:
         def grad_func(*x: torch.Tensor):
             with torch.enable_grad():
                 x = [x_.detach().clone().requires_grad_(True) for x_ in x]
                 loss = func(*x)
-            return list(torch.autograd.grad(outputs=loss, inputs=x, create_graph=True))
+            return list(torch.autograd.grad(outputs=loss, inputs=x, create_graph=unrolling))
 
     return grad_func
 
@@ -146,18 +146,15 @@ def solve_lower(energy: Energy, method: str,
         adam_result = optimise_adam(func, param_groups, **options)
         lower_prob_result = parse_result(adam_result, **options)
     elif method == 'nag_unrolling':
-        # Only for testing purposes ...
         func = build_objective_func(energy, batch_optim=batch_optim, use_prox=False)
-        grad_func = build_gradient_func(func, batch_optim)
+        grad_func = build_gradient_func(func, batch_optim, unrolling=True)
         param_groups = assemble_param_groups_nag(u_, **options)
 
         nag_result = optimise_nag_unrolling(func, grad_func, param_groups, **options)
         lower_prob_result = parse_result(nag_result, **options)
-
     elif method == 'napg_unrolling':
-        # Only for testing purposes ...
         func = build_objective_func(energy, batch_optim=batch_optim, use_prox=True)
-        grad_func = build_gradient_func(func, batch_optim)
+        grad_func = build_gradient_func(func, batch_optim, unrolling=True)
         param_groups = assemble_param_groups_nag(u_, **options)
         add_prox(param_groups, u_, energy, batch_optim)
 

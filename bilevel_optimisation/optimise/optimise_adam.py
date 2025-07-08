@@ -4,7 +4,7 @@ from typing import Dict, List, Callable, Any
 from bilevel_optimisation.data import OptimiserResult
 from bilevel_optimisation.optimise.optimise_nag import flatten_groups, compute_relative_error
 
-DEFAULTS = {'proj': None, 'eps': 1e-8}
+DEFAULTS = {'eps': 1e-8}
 
 def create_projected_optimiser(base_optimiser: type[torch.optim.Optimizer]) -> type[torch.optim.Optimizer]:
 
@@ -20,10 +20,8 @@ def create_projected_optimiser(base_optimiser: type[torch.optim.Optimizer]) -> t
                     for p in group['params']:
                         if not p.requires_grad:
                             continue
-
-                        if group['proj']:
-                            p.data.copy_(group['proj'](p.data))
-
+                        if hasattr(p, 'proj'):
+                            p.data.copy_(p.proj(p.data))
             return loss
 
     ProjectedOptimiser.__name__ = 'Projected{:s}'.format(base_optimiser.__name__)

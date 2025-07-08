@@ -50,10 +50,12 @@ def bilevel_learn(config: Configuration):
     #                                                        'max_num_backtracking_iterations': 20},
     #                            dtype=dtype, device=device, callbacks=callbacks)
 
+    optimisation_options_adam = {'max_num_iterations': 50, 'lr': {1e-3, 1e-1}, 'parameterwise': True}
+    optimisation_options_lbfgs = {'max_num_iterations': 500, 'max_iter': [10], 'history_size': [10],
+                                  'line_search_fn': ['strong_wolfe']}
+
     bilevel_optimisation.learn(regulariser, lam, func, train_image_dataset,
-                               optimisation_method_upper='adam',
-                               optimisation_options_upper={'max_num_iterations': 5000, 'lr': [1e-3, 1e-1],
-                                                           'parameterwise': True},
+                               optimisation_method_upper='lbfgs', optimisation_options_upper=optimisation_options_lbfgs,
                                dtype=dtype, device=device, callbacks=callbacks)
 
 

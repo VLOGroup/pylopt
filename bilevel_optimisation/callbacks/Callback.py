@@ -185,6 +185,7 @@ class TrainingMonitor(Callback):
         self.test_loss_list = []
         self.train_loss_list = []
         self.test_psnr_list = []
+        self.potential_params_list = []
 
         self.lip_const_dict = {}
 
@@ -224,18 +225,23 @@ class TrainingMonitor(Callback):
                 device = kwargs.get('device', None)
                 dtype = kwargs.get('dtype', None)
                 test_loss, test_psnr = self._evaluate_on_test_data(step, regulariser, device, dtype)
-                if test_psnr:
-                    self.test_psnr_list.append(test_psnr)
-                if test_loss:
-                    self.test_loss_list.append(test_loss)
-
-                for tag, value, value_list in zip(['loss/test', 'psnr/test'],
+                for tag, value, value_list in zip(['loss/train', 'loss/test', 'psnr/test'],
                                                   [loss, test_loss, test_psnr],
                                                   [self.train_loss_list, self.test_loss_list, self.test_psnr_list]):
                     if value:
                         value_list.append(value if isinstance(value, float) else value.detach().cpu().numpy())
                         if self.tb_writer:
                             self.tb_writer.add_scalar(tag, value, step + 1)
+
+                # TODO:
+                #   > does this work as expected for all kind of potentials?
+                #   > works fine for student-t potential
+                potential_param = regulariser.potential.get_parameters().detach().cpu().numpy()
+                self.potential_params_list.append(potential_param)
+                if self.tb_writer:
+                    self.tb_writer.add_scalars('potentials/weights',
+                                               {'potential_{:d}'.format(i): np.exp(potential_param[i])
+                                                for i in range(0, len(potential_param))}, step + 1)
 
     def on_train_end(self):
         self._visualise_training_stats()
@@ -247,11 +253,11 @@ class TrainingMonitor(Callback):
 
         ax_1 = fig.add_subplot(1, 2, 1)
         ax_1.set_title('training loss')
-        ax_1.plot(self.evaluation_freq * np.arange(0, len(self.train_loss_list)),
+        ax_1.plot(np.arange(0, len(self.train_loss_list)),
                   self.train_loss_list, label='train loss')
-        ax_1.plot(self.evaluation_freq * np.arange(0, len(moving_average)), moving_average, color='orange',
+        ax_1.plot(np.arange(0, len(moving_average)), moving_average, color='orange',
                   label='moving average of train loss')
-        ax_1.plot(self.evaluation_freq * np.arange(0, len(self.test_loss_list)), self.test_loss_list,
+        ax_1.plot(np.arange(0, len(self.test_loss_list)), self.test_loss_list,
                   color='cyan', label='test loss')
         ax_1.xaxis.get_major_locator().set_params(integer=True)
         ax_1.set_xlabel('iteration')
@@ -262,7 +268,7 @@ class TrainingMonitor(Callback):
         ax_2.plot(self.evaluation_freq * np.arange(0, len(self.test_psnr_list)), self.test_psnr_list)
         ax_2.xaxis.get_major_locator().set_params(integer=True)
         ax_2.set_xlabel('iteration')
-        ax_2.yaxis.set_major_locator(MultipleLocator(0.5))
+        # ax_2.yaxis.set_major_locator(MultipleLocator(0.5))
 
         plt.savefig(os.path.join(self.path_to_data_dir, 'training_stats.png'))
         plt.close(fig)
