@@ -22,6 +22,8 @@ data:
   dataset:
     train:
       root_dir: '/home/florianthaler/Documents/data/image_data/BSDS300/images/train'
+      crop_size: 64
+      batch_size: 128
     test:
       root_dir: '/home/florianthaler/Documents/data/image_data/some_images'
 

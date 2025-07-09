@@ -1,2 +1,1 @@
 from bilevel_optimisation.potential.StudentT import StudentT
-from bilevel_optimisation.potential.SplinePotential import LinearSplinePotential

@@ -74,14 +74,15 @@ def denoise(config: Configuration):
     options_adam = {'max_num_iterations': 1000, 'rel_tol': 1e-4, 'lr': [1e-3, 1e-4], 'batch_optimisation': False}
     options_nag = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.71], 'batch_optimisation': True}
     # options_nag = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.71, 0.87], 'batch_optimisation': False}
-    options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.9], 'alpha': [0.0001]}
-    # options_napg = {'max_num_iterations': 300, 'rel_tol': 1e-17, 'beta': [0.9], 'lip_const': [2 ** 10]}
+    options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.9, 0.9], 'alpha': [0.0001, 0.001], 'batch_optimisation': False}
     options_nag_unrolling = {'max_num_iterations': 10, 'rel_tol': 1e-5, 'alpha': [1e-3, 1e-7], 'batch_optimisation': False}
+    options_napg_unrolling = {'max_num_iterations': 10, 'rel_tol': 1e-5, 'alpha': [1e-7], 'batch_optimisation': True}
     # options_nag_unrolling = {'max_num_iterations': 10, 'rel_tol': 1e-5, 'lip_const': [1e4]}
 
     with Timer(device=device) as t:
         # lower_prob_result = solve_lower(energy=energy, method='nag', options=options_nag)
         lower_prob_result = solve_lower(energy=energy, method='napg', options=options_napg)
+        # lower_prob_result = solve_lower(energy=energy, method='napg_unrolling', options=options_napg_unrolling)
 
     print('denoising stats:')
     print(' > elapsed time [ms] = {:.5f}'.format(t.time_delta()))
