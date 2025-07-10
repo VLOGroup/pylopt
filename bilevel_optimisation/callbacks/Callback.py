@@ -199,9 +199,9 @@ class TrainingMonitor(Callback):
 
     def on_step(self, step: int, regulariser: Optional[FieldsOfExperts]=None,
                 loss: Optional[torch.Tensor]=None, **kwargs) -> None:
-        logging.info('[{:s}] evaluate on test dataset'.format(self.__class__.__name__))
-
         if step % self.evaluation_freq:
+            logging.info('[{:s}] evaluate on test dataset'.format(self.__class__.__name__))
+
             if loss:
                 self.train_loss_list.append(loss.detach().cpu().numpy())
                 if self.tb_writer:
@@ -257,7 +257,7 @@ class TrainingMonitor(Callback):
                   self.train_loss_list, label='train loss')
         ax_1.plot(np.arange(0, len(moving_average)), moving_average, color='orange',
                   label='moving average of train loss')
-        ax_1.plot(np.arange(0, len(self.test_loss_list)), self.test_loss_list,
+        ax_1.plot(self.evaluation_freq * np.arange(0, len(self.test_loss_list)), self.test_loss_list,
                   color='cyan', label='test loss')
         ax_1.xaxis.get_major_locator().set_params(integer=True)
         ax_1.set_xlabel('iteration')
@@ -268,7 +268,6 @@ class TrainingMonitor(Callback):
         ax_2.plot(self.evaluation_freq * np.arange(0, len(self.test_psnr_list)), self.test_psnr_list)
         ax_2.xaxis.get_major_locator().set_params(integer=True)
         ax_2.set_xlabel('iteration')
-        # ax_2.yaxis.set_major_locator(MultipleLocator(0.5))
 
         plt.savefig(os.path.join(self.path_to_data_dir, 'training_stats.png'))
         plt.close(fig)

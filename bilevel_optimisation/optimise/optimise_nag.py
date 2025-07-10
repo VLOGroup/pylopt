@@ -120,7 +120,7 @@ def apply_backtracking(func: Callable, param_groups: List[Dict[str, Any]], group
         else:
             param_groups[group_idx]['lip_const'] *= 2.0
             for p, p_orig in zip(param_groups[group_idx]['params'], params_orig[group_idx]):
-                p.copy_(p_orig)
+                p.copy_(p_orig.clone())
 
 def compute_relative_error(param_groups: List[Dict[str, Any]]) -> torch.Tensor:
     error = 0.0
@@ -209,36 +209,3 @@ def optimise_nag_unrolling(func: Callable, grad_func: Callable, param_groups: Li
 
     return OptimiserResult(solution=param_groups_, num_iterations=num_iterations,
                              loss=func(*flatten_groups(param_groups_)))
-
-# def optimise_nag_unrolling_old(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]],
-#                            max_num_iterations: int=50, num_unrolling_iterations: int=10,
-#                            rel_tol: float=None, **unknown_options) -> OptimiserResult:
-#     num_iterations = max_num_iterations
-#     param_groups_ = harmonise_param_groups_nag(param_groups)
-#
-#     for k in range(0, max_num_iterations):
-#         # step_nag_unrolling(func, grad_func, param_groups_, num_unrolling_iterations)
-#         for l in range(0, min(num_unrolling_iterations, MAX_NUM_UNROLLING_ITER)):
-#             grad_idx = 0
-#             for group_idx, group in enumerate(param_groups_):
-#                 make_intermediate_step(group, in_place=False)
-#
-#                 params_flat = flatten_groups(param_groups_)
-#                 grads = grad_func(*params_flat)
-#                 group_grads = grads[grad_idx: grad_idx + len(group['params'])]
-#                 if group['alpha']:
-#                     make_gradient_step(group, group_grads, group['alpha'], in_place=False)
-#                 else:
-#                     apply_backtracking(func, param_groups_, group_idx, group_grads, in_place=False)
-#                 grad_idx += len(group['params'])
-#
-#         if rel_tol:
-#             rel_error = compute_relative_error(param_groups_)
-#             if rel_error <= rel_tol:
-#                 num_iterations = k + 1
-#                 break
-#
-#     result = OptimiserResult(solution=param_groups_, num_iterations=num_iterations,
-#                              loss=func(*flatten_groups(param_groups_)))
-#
-#     return result

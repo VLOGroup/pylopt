@@ -19,39 +19,7 @@ from bilevel_optimisation.utils.logging_utils import setup_logger
 from bilevel_optimisation.utils.seeding_utils import seed_random_number_generators
 from bilevel_optimisation.utils.Timer import Timer
 
-def visualise_denoising_results(u_clean: torch.Tensor, u_noisy: torch.Tensor, u_denoised: torch.Tensor) -> None:
-    u_clean_splits = torch.split(u_clean, split_size_or_sections=1, dim=0)
-    u_noisy_splits = torch.split(u_noisy, split_size_or_sections=1, dim=0)
-    u_denoised_splits = torch.split(u_denoised, split_size_or_sections=1, dim=0)
-
-    num_rows = len(u_clean_splits)
-    num_cols = 3
-    fig, axes = plt.subplots(num_rows, num_cols, figsize=(3 * num_cols, 3 * num_rows))
-    if num_rows == 1:
-        axes = [axes]
-
-    for idx, (item_clean, item_noisy, item_denoised) in (
-            enumerate(zip(u_clean_splits, u_noisy_splits, u_denoised_splits))):
-        psnr = compute_psnr(item_clean, item_denoised)
-        print(' > psnr [dB] = {:.5f}'.format(psnr.detach().cpu().item()))
-
-        axes[idx][0].imshow(item_clean.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
-        axes[idx][1].imshow(item_noisy.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
-        axes[idx][2].imshow(item_denoised.squeeze().detach().cpu().numpy(), cmap=cmaps['gray'])
-
-        axes[idx][0].axis('off')
-        axes[idx][1].axis('off')
-        axes[idx][2].axis('off')
-
-        if idx == 0:
-            axes[idx][0].set_title('clean')
-            axes[idx][1].set_title('noisy')
-            axes[idx][2].set_title('denoised')
-
-    plt.show()
-    plt.close(fig)
-
-def denoise(config: Configuration):
+def evaluate_performance(config: Configuration):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     dtype = parse_datatype(config)
 
@@ -66,31 +34,24 @@ def denoise(config: Configuration):
 
     u_clean = list(test_loader)[0]
     u_clean = u_clean.to(device=device, dtype=dtype)
-
-
     measurement_model = MeasurementModel(u_clean, config)
     lam = config['energy']['lam'].get()
     energy = Energy(measurement_model, regulariser, lam)
     energy.to(device=device, dtype=dtype)
 
-            # options_adam = {'max_num_iterations': 1000, 'rel_tol': 1e-4, 'lr': [1e-3, 1e-4], 'batch_optimisation': False}
-            # options_nag = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.71], 'batch_optimisation': True}
-            # options_nag = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.71, 0.87], 'batch_optimisation': False}
-            # options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.9, 0.9], 'alpha': [0.0001, 0.001], 'batch_optimisation': False}
-    options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-3, 'beta': [0.9], 'lip_const': [1000]}
-            # options_nag_unrolling = {'max_num_iterations': 10, 'rel_tol': 1e-5, 'alpha': [1e-3, 1e-7], 'batch_optimisation': False}
-            # options_napg_unrolling = {'max_num_iterations': 10, 'rel_tol': 1e-5, 'alpha': [1e-7], 'batch_optimisation': True}
-            # options_nag_unrolling = {'max_num_iterations': 10, 'rel_tol': 1e-5, 'lip_const': [1e4]}
-
+    options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'batch_optimisation': True}
     with Timer(device=device) as t:
         lower_prob_result = solve_lower(energy=energy, method='napg', options=options_napg)
 
-    print('denoising stats:')
+    psnr = torch.mean(compute_psnr(u_clean, lower_prob_result.solution))
+    psnr = psnr.detach().cpu().item()
+
+    print('denoising performance:')
+    print(' > denoised {:d} images'.format(u_clean.shape[0]))
     print(' > elapsed time [ms] = {:.5f}'.format(t.time_delta()))
     print(' > number of iterations = {:d}'.format(lower_prob_result.num_iterations))
     print(' > cause of termination = {:s}'.format(lower_prob_result.message))
-
-    visualise_denoising_results(u_clean, measurement_model.get_noisy_observation(), lower_prob_result.solution)
+    print(' > average psnr: {:.5f}'.format(psnr))
 
 def main():
     seed_random_number_generators(123)
@@ -110,7 +71,7 @@ def main():
     configuring_module = '[DENOISING] predict'
     config = load_app_config(app_name, args.configs, configuring_module)
 
-    denoise(config)
+    evaluate_performance(config)
 
 if __name__ == '__main__':
     main()

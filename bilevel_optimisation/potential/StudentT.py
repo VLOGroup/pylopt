@@ -20,17 +20,17 @@ class StudentT(Potential):
         model_path = config['potential']['student_t']['initialisation']['file_path'].get()
         if not model_path:
             if initialisation_mode == 'rand':
-                weights = multiplier * torch.rand(num_marginals)
+                weights = torch.log(multiplier * torch.rand(num_marginals))
             else:
-                weights = multiplier * torch.ones(num_marginals)
+                weights = torch.log(multiplier * torch.ones(num_marginals))
             self.weight_tensor = torch.nn.Parameter(data=weights, requires_grad=trainable)
+
         else:
             dummy_data = torch.ones(num_marginals)
             self.weight_tensor = torch.nn.Parameter(data=dummy_data, requires_grad=trainable)
             self._load_from_file(model_path)
-
-        with torch.no_grad():
-            self.weight_tensor.add_(torch.log(torch.tensor(multiplier)))
+            with torch.no_grad():
+                self.weight_tensor.add_(torch.log(torch.tensor(multiplier)))
 
     def get_parameters(self) -> torch.Tensor:
         return self.weight_tensor.data

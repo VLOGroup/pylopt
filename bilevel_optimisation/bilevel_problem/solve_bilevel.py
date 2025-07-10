@@ -30,10 +30,11 @@ def assemble_param_groups_base(regulariser: FieldsOfExperts, alternating: bool=F
                  'name': 'joint'}
         param_groups.append(group)
     else:
-        for key in param_dict.keys():
-            group = {'params': param_dict[key],
-                     'name': key}
-            param_groups.append(group)
+        for key, value in param_dict.items():
+            if value:
+                group = {'params': value,
+                         'name': key}
+                param_groups.append(group)
 
     return param_groups
 
@@ -148,6 +149,7 @@ class BilevelOptimisation:
         else:
             raise NotImplementedError
 
+    @torch.no_grad()
     def _learn_nag(self, regulariser: FieldsOfExperts, lam: float, upper_loss: Callable,
                    optimisation_options_upper: Dict[str, Any], train_loader: torch.utils.data.DataLoader,
                    dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None):
@@ -165,39 +167,28 @@ class BilevelOptimisation:
 
        try:
            for k, batch in enumerate(train_loader):
-               with torch.no_grad():
-                   batch_ = batch.to(dtype=dtype, device=device)
-                   measurement_model = MeasurementModel(batch_, self.config)
+               batch_ = batch.to(dtype=dtype, device=device)
+               measurement_model = MeasurementModel(batch_, self.config)
 
-                   energy = Energy(measurement_model, regulariser, lam)
-                   energy = energy.to(device=device, dtype=dtype)
+               energy = Energy(measurement_model, regulariser, lam)
+               energy = energy.to(device=device, dtype=dtype)
 
-                   func = self._loss_func_factory(upper_loss, energy, batch_)
-                   def grad_func(*params):
-                       with torch.enable_grad():
-                           loss_ = func(*params)
-                       return list(torch.autograd.grad(outputs=loss_, inputs=params))
-                   loss = step_nag(func, grad_func, param_groups_)
+               func = self._loss_func_factory(upper_loss, energy, batch_)
+               def grad_func(*params):
+                   with torch.enable_grad():
+                       loss_ = func(*params)
+                   return list(torch.autograd.grad(outputs=loss_, inputs=params))
+               loss = step_nag(func, grad_func, param_groups_)
 
-                   for cb in callbacks:
-                       cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)
+               for cb in callbacks:
+                   cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)
 
-                   logging.info('[TRAIN] iteration [{:d} / {:d}]: '
-                                'loss = {:.5f}'.format(k + 1, max_num_iterations, loss.detach().cpu().item()))
-
-                   # for group in param_groups_:
-                   #     if group['lip_const'] > 1e6:
-                   #         group['theta'] = 0
-                   #         group['lip_const'] = 1
-                   #         group['history'] = [p.detach().clone() for p in group['params']]
-                   #         for p in group['params']:
-                   #             p.add_(1e-5 * torch.randn_like(p))
+               logging.info('[TRAIN] iteration [{:d} / {:d}]: '
+                            'loss = {:.5f}'.format(k + 1, max_num_iterations, loss.detach().cpu().item()))
 
                if (k + 1) == max_num_iterations:
                    logging.info('[TRAIN] reached maximal number of iterations')
                    break
-               else:
-                   k += 1
        finally:
            for cb in callbacks:
                cb.on_train_end()
@@ -236,7 +227,7 @@ class BilevelOptimisation:
                     func = self._loss_func_factory(upper_loss, energy, batch_)
                     loss = step_adam(optimiser, func, param_groups_)
 
-                    scheduler.step()
+                    # scheduler.step()
 
                     for cb in callbacks:
                         cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)
@@ -247,8 +238,6 @@ class BilevelOptimisation:
                 if (k + 1) == max_num_iterations:
                     logging.info('[TRAIN] reached maximal number of iterations')
                     break
-                else:
-                    k += 1
         finally:
             for cb in callbacks:
                 cb.on_train_end()
@@ -293,8 +282,6 @@ class BilevelOptimisation:
                     if (k + 1) == max_num_iterations:
                         logging.info('[TRAIN] reached maximal number of iterations')
                         break
-                    else:
-                        k += 1
         finally:
             for cb in callbacks:
                 cb.on_train_end()

@@ -29,7 +29,7 @@ def bilevel_learn(config: Configuration):
     regulariser = FieldsOfExperts(potential, image_filter)
 
     method_lower = 'napg'
-    options_lower = {'max_num_iterations': 100, 'rel_tol': 1e-5, 'lip_const': [1e5]}
+    options_lower = {'max_num_iterations': 300, 'rel_tol': None, 'lip_const': [1e5]}
     path_to_eval_dir = create_evaluation_dir(config)
     bilevel_optimisation = BilevelOptimisation(method_lower, options_lower, config, solver='cg',
                                                options_solver={'max_num_iterations': 500},
@@ -42,30 +42,15 @@ def bilevel_learn(config: Configuration):
                  SaveModel(path_to_data_dir=path_to_eval_dir, save_freq=2),
                  TrainingMonitor(test_image_dataset, config, method_lower, options_lower, func, path_to_eval_dir,
                                     evaluation_freq=2, tb_writer=tb_writer)]
-
-    # bilevel_optimisation.learn(regulariser, lam, func, train_image_dataset,
-    #                            optimisation_method_upper='nag',
-    #                            optimisation_options_upper={'max_num_iterations': 500, 'lip_const': [1, 1],
-    #                                                        'beta': [0.71, 0.71], 'alternating': True,
-    #                                                        'max_num_backtracking_iterations': 20},
-    #                            dtype=dtype, device=device, callbacks=callbacks)
-
-    optimisation_options_adam = {'max_num_iterations': 3000, 'lr': [1e-3, 1e-1], 'parameterwise': True}
-    optimisation_options_lbfgs = {'max_num_iterations': 500, 'max_iter': [10], 'history_size': [10],
-                                  'line_search_fn': ['strong_wolfe']}
+    optimisation_options_nag = {'max_num_iterations': 50, 'lip_const': [1]}
+            # optimisation_options_adam = {'max_num_iterations': 3000, 'lr': [1e-3, 1e-1], 'parameterwise': True}
+    optimisation_options_adam = {'max_num_iterations': 3000, 'lr': [1e-3], 'parameterwise': True}
+            # optimisation_options_lbfgs = {'max_num_iterations': 500, 'max_iter': [10], 'history_size': [10],
+            #                               'line_search_fn': ['strong_wolfe']}
 
     bilevel_optimisation.learn(regulariser, lam, func, train_image_dataset,
-                               optimisation_method_upper='adam', optimisation_options_upper=optimisation_options_adam,
+                               optimisation_method_upper='nag', optimisation_options_upper=optimisation_options_nag,
                                dtype=dtype, device=device, callbacks=callbacks)
-
-
-    # callbacks = [PlotFiltersAndPotentials(path_to_data_dir=path_to_eval_dir, plotting_freq=2, tb_writer=tb_writer)]
-    # bilevel_optimisation.learn(regulariser, lam, func, train_image_dataset,
-    #                            optimisation_method_upper='debug',
-    #                            optimisation_options_upper={'max_num_iterations': 5000, 'lip_const': [1, 1],
-    #                                                        'beta': [0.71, 0.71], 'alternating': True,
-    #                                                        'max_num_backtracking_iterations': 20},
-    #                            dtype=dtype, device=device, callbacks=callbacks)
 
 def main():
     seed_random_number_generators(123)
