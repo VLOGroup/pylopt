@@ -213,7 +213,14 @@ class BilevelOptimisation:
 
         optimiser = create_projected_optimiser(torch.optim.Adam)(param_groups_)
 
+        # TODO
+        #   > make me configurable ...
         max_num_iterations = optimisation_options_upper['max_num_iterations']
+        num_iterations_1 = min(5000, max_num_iterations)
+        scheduler_1 = torch.optim.lr_scheduler.ConstantLR(optimiser, factor=1.0, total_iters=num_iterations_1)
+        scheduler_2 = torch.optim.lr_scheduler.CosineAnnealingLR(optimiser, T_max=max_num_iterations - num_iterations_1)
+        scheduler = torch.optim.lr_scheduler.ChainedScheduler([scheduler_1, scheduler_2], optimizer=optimiser)
+
         for cb in callbacks:
             cb.on_train_begin(regulariser, device=device, dtype=dtype)
 
@@ -228,6 +235,8 @@ class BilevelOptimisation:
 
                     func = self._loss_func_factory(upper_loss, energy, batch_)
                     loss = step_adam(optimiser, func, param_groups_)
+
+                    scheduler.step()
 
                     for cb in callbacks:
                         cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)
