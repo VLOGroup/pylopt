@@ -9,6 +9,30 @@ from scipy.fftpack import idct
 def zero_mean_projection(x: torch.Tensor) -> torch.Tensor:
     return x - torch.mean(x, dim=(-2, -1), keepdim=True)
 
+def orthogonal_projection_procrustes(x: torch.Tensor, eps: float=1e-7, max_num_iterations: int=5,
+                                     rel_tol: float=1e-5) -> torch.Tensor:
+    x_flattened = [x[i, 0, :, :].flatten() for i in range(0, x.shape[0])]
+    x_stacked = torch.stack(x_flattened, dim=1)
+    m, n = x_stacked.shape
+    diag = torch.diag(torch.ones(n))
+
+    v_old = torch.zeros_like(x_stacked)
+    for k in range(0, max_num_iterations):
+        z = torch.matmul(x_stacked, diag)
+        q, s, r_h = torch.linalg.svd(z, full_matrices=False)
+        v = torch.matmul(q, r_h)
+
+        tmp = torch.matmul(v.transpose(dim0=0, dim1=1), x_stacked)
+        diag_elements = torch.diag(tmp)
+        diag_elements = torch.clamp(diag_elements, min=eps)
+        diag = torch.diag(diag_elements)
+        if torch.linalg.norm(v - v_old) < rel_tol:
+            break
+        v_old = v.clone()
+
+    x_orthogonal = [torch.unflatten(v[:, j], dim=0, sizes=x.shape[-2:]) for j in range(0, v.shape[1])]
+    return torch.stack(x_orthogonal, dim=0).unsqueeze(dim=1)
+
 class ImageFilter(torch.nn.Module):
     def __init__(self, config: Configuration):
         super().__init__()
@@ -18,8 +42,9 @@ class ImageFilter(torch.nn.Module):
         self.padding_mode = config['image_filter']['padding_mode'].get()
 
         initialisation_mode = config['image_filter']['initialisation']['mode'].get()
-        multiplier = config['image_filter']['multiplier'].get()
+        multiplier = config['image_filter']['initialisation']['multiplier'].get()
         trainable = config['image_filter']['trainable'].get()
+        enforce_orthogonality = config['image_filter']['enforce_orthogonality'].get()
 
         model_path = config['image_filter']['initialisation']['file_path'].get()
         if not model_path:
@@ -38,11 +63,19 @@ class ImageFilter(torch.nn.Module):
             dummy_data = torch.ones(self.filter_dim ** 2 - 1, 1, self.filter_dim, self.filter_dim)
             self.filter_tensor = torch.nn.Parameter(data=dummy_data, requires_grad=trainable)
             self._load_from_file(model_path)
+
         with torch.no_grad():
             self.filter_tensor.mul_(multiplier)
             self.filter_tensor.copy_(zero_mean_projection(self.filter_tensor))
-        if not hasattr(self.filter_tensor, 'proj'):
-            setattr(self.filter_tensor, 'proj', zero_mean_projection)
+
+        # define projections
+        if not hasattr(self.filter_tensor, 'zero_mean_projection'):
+            setattr(self.filter_tensor, 'zero_mean_projection', zero_mean_projection)
+        if enforce_orthogonality:
+            max_num_iterations = 5
+            def orthogonal_projection(x: torch.Tensor):
+                return orthogonal_projection_procrustes(x, max_num_iterations=max_num_iterations)
+            setattr(self.filter_tensor, 'orthogonal_projection', orthogonal_projection)
 
     def get_filter_tensor(self) -> torch.Tensor:
         return self.filter_tensor.data

@@ -1,7 +1,7 @@
 
 import torch
 
-from bilevel_optimisation.filters.Filters import ImageFilter
+from bilevel_optimisation.filters.ImageFilter import ImageFilter
 from bilevel_optimisation.potential.Potential import Potential
 
 class FieldsOfExperts(torch.nn.Module):

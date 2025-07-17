@@ -35,6 +35,15 @@ generated binary files in the building process of the wheel.
 
 # Run Tensorboard
 
+## Local
+
 Activate a virtual environment with pre-installed Tensorboard (if not installed, simply run `pip install tensorboard`).
 Then, in a shell type `tensorboard --logdir=<path_to_tfevents_dir>`. Then the dashboard of Tensorboard is (per 
 default) available at `http://localhost:6006/`.
+
+## Remote
+
+On the remote server run tensorboard as above. To view the tensorboard from the local machine proceed as follows
+
+* ssh <user>@<remote> -N -f -L localhost:16006:localhost:6006
+* Open localhost:16006 in the browser of the local machine

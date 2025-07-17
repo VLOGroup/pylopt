@@ -60,7 +60,7 @@ def make_gradient_step(param_group: Dict[str, Any], param_group_grads: List[torc
             p.data.sub_(step_size * grad_p)
             if hasattr(p, 'prox'):
                 p.data.copy_(p.prox(p.data, step_size))
-            if hasattr(p, 'proj'):
+            if hasattr(p, 'zero_mean_projection'):
                 p.data.copy_(p.proj(p.data))
     else:
         params_new = []
@@ -68,7 +68,7 @@ def make_gradient_step(param_group: Dict[str, Any], param_group_grads: List[torc
             p = p - step_size * grad_p
             if hasattr(p, 'prox'):
                 p = p.prox(p, step_size)
-            if hasattr(p, 'proj'):
+            if hasattr(p, 'zero_mean_projection'):
                 p = p.proj(p)
             params_new.append(p)
         param_group['params'] = params_new

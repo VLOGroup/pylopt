@@ -20,7 +20,7 @@ def create_projected_optimiser(base_optimiser: type[torch.optim.Optimizer]) -> t
                     for p in group['params']:
                         if not p.requires_grad:
                             continue
-                        if hasattr(p, 'proj'):
+                        if hasattr(p, 'zero_mean_projection'):
                             p.data.copy_(p.proj(p.data))
             return loss
 

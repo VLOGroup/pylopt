@@ -14,7 +14,7 @@ class StudentT(Potential):
         super().__init__(num_marginals)
 
         initialisation_mode = config['potential']['student_t']['initialisation']['mode'].get()
-        multiplier = config['potential']['student_t']['multiplier'].get()
+        multiplier = config['potential']['student_t']['initialisation']['multiplier'].get()
         trainable = config['potential']['student_t']['trainable'].get()
 
         model_path = config['potential']['student_t']['initialisation']['file_path'].get()
