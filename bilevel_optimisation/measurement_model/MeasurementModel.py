@@ -1,5 +1,4 @@
 import torch
-from confuse import Configuration
 
 class MeasurementModel(torch.nn.Module):
     """
@@ -7,22 +6,32 @@ class MeasurementModel(torch.nn.Module):
     Observations are assumed to be a sum of a forward operator applied to the clean data and noise sampled from
     the multivariate normal distribution with zero mean and covariance matrix (noise_level ** 2) * I.
     """
-    def __init__(self, u_clean: torch.Tensor, config: Configuration) -> None:
+    def __init__(self, u_clean: torch.Tensor, **kwargs) -> None:
         """
         Initialisation of an object of class MeasurementModel. The clean data tensor u_clean is
         stored as a non-trainable parameter.
 
         :param u_clean: Tensor of shape [batch_size, channels, height, width]
+        :param kwargs
         :config
         """
         super().__init__()
         self.u_clean = torch.nn.Parameter(u_clean, requires_grad=False)
 
-        # TODO:
-        #   > extend search for operators to submodule (operators f.e.) such that custom forward operators can be used
-        operator_name = config['measurement_model']['forward_operator'].get()
-        self.operator = getattr(torch.nn, operator_name)()
-        self.noise_level = config['measurement_model']['noise_level'].get()
+        if 'config' in kwargs.keys():
+            config = kwargs.get('config')
+
+            # TODO:
+            #   > extend search for operators to submodule (operators f.e.) such that custom forward operators can be used
+
+            operator_name = config['measurement_model']['forward_operator'].get()
+            self.operator = getattr(torch.nn, operator_name)()
+            self.noise_level = config['measurement_model']['noise_level'].get()
+        elif 'operator' in kwargs.keys() and 'noise_level' in kwargs.keys():
+            self.operator = kwargs.get('operator')
+            self.noise_level = kwargs.get('noise_level')
+        else:
+            raise ValueError('Must provide config or both, operator and noise_level.')
 
         self.u_noisy = torch.nn.Parameter(self.make_noisy_observation(), requires_grad = False)
 
@@ -55,7 +64,7 @@ class MeasurementModel(torch.nn.Module):
         """
         return 0.5 * torch.sum((u - self.u_noisy) ** 2) / self.noise_level ** 2
 
-    def forward(self, u: torch.Tensor) -> torch.Tensor:
+    def forward(self, u: torch.Tensor,) -> torch.Tensor:
         """
         Computes the data fidelty of the input tensor u by calling self._data_fidelty(u)
 

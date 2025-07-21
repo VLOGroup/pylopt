@@ -16,7 +16,7 @@ class Energy(torch.nn.Module, ABC):
         Initialisation of an object of class InnerEnergy
 
         :param measurement_model: Object of class MeasurementModel
-        :param regulariser: Regulariser modelled as inheritance of class torch.nn.Module
+        :param regulariser: Fields of experts regulariser
         :param lam: Regularisation parameter
         """
         super().__init__()

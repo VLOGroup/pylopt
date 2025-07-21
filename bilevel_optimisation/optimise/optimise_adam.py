@@ -4,7 +4,7 @@ from typing import Dict, List, Callable, Any
 from bilevel_optimisation.data import OptimiserResult
 from bilevel_optimisation.optimise.optimise_nag import flatten_groups, compute_relative_error
 
-DEFAULTS = {'eps': 1e-8}
+DEFAULTS_GROUP = {'lr': 1e-4, 'betas': (0.9, 0.999), 'weight_decay': 0.0, 'eps': 1e-8}
 
 def create_projected_optimiser(base_optimiser: type[torch.optim.Optimizer]) -> type[torch.optim.Optimizer]:
 
@@ -35,8 +35,12 @@ def harmonise_param_groups_adam(param_groups: List[Dict[str, Any]]) -> List[Dict
         for key in group.keys():
             if key != 'params':
                 group_[key] = group[key]
-        for key, value in DEFAULTS.items():
-            group_[key] = group.get(key, value)
+
+        group_['lr'] = group['lr'] if group['lr'] is not None else DEFAULTS_GROUP['lr']
+        group_['betas'] = group['betas'] if all(beta is not None for beta in group['betas']) else DEFAULTS_GROUP['betas']
+        group_['weight_decay'] = group['weight_decay'] if group['weight_decay'] is not None else DEFAULTS_GROUP['weight_decay']
+        group_['eps'] = DEFAULTS_GROUP['eps']
+
         param_groups_.append(group_)
     return param_groups_
 
