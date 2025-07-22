@@ -8,11 +8,15 @@ image_filter:
   initialisation:
     mode: 'randn'
   multiplier: 5
+  trainable: True
 
 potential:
   student_t:
     initialisation:
       mode: uniform
-    multiplier: 0.0025
+    multiplier: 0.015
+
+energy:
+  lam: 0.5
 
 

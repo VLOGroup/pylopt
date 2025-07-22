@@ -1,0 +1,17 @@
+data:
+  type: 'float32'
+  dataset:
+    test:
+      root_dir: '/home/florianthaler/Documents/data/image_data/BSDS300/images/test_as_landscape' # '/home/florianthaler/Documents/data/BSDS300/images/test_as_landscape' # /image_data/some_images' #
+
+image_filter:
+  initialisation:
+    file_path: '/home/florianthaler/Documents/research/bilevel_optimisation/bilevel_optimisation/model_data/foe_filters_7x7_chen-ranftl-pock_2014_scaled.pt'
+
+potential:
+  student_t:
+    initialisation:
+      file_path: '/home/florianthaler/Documents/research/bilevel_optimisation/bilevel_optimisation/model_data/potential_iter_17.pt'
+
+energy:
+  lam: 10

@@ -6,12 +6,13 @@ from bilevel_optimisation.measurement_model import MeasurementModel
 
 class Energy(torch.nn.Module, ABC):
     """
-    Class, inherited from torch.nn.Module, which is used as base class of the inner bilevel
-    energy. Each class, inheriting from InnerEnergy must implement the methods sample() and
-    argmin().
+    Class, inheriting from torch.nn.Module which represents the energy function assumed to be the sum of
+    a data fidelty term and a regularisation term:
+
+        (1 / (2 * sigma**2)) * | u - u_{noisy}| ** 2 + lam * regulariser(u)
+
     """
-    def __init__(self, measurement_model: MeasurementModel,
-                 regulariser: FieldsOfExperts, lam: float) -> None:
+    def __init__(self, measurement_model: MeasurementModel, regulariser: FieldsOfExperts, lam: float) -> None:
         """
         Initialisation of an object of class InnerEnergy
 
@@ -26,7 +27,7 @@ class Energy(torch.nn.Module, ABC):
 
     def forward(self, u: torch.Tensor) -> torch.Tensor:
         """
-        Returns sum of data fidelty and scaled regularisation term
+        Returns sum of data fidelty and (scaled) regularisation term
 
         :param u: Tensor at which data fidelty and regulariser are evaluated
         :return: Tensor representing the energy at the input x

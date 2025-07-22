@@ -1,21 +1,30 @@
 # BilevelOptimisation
 
 BilevelOptimisation is a PyTorch-based library for learning hyperparameters 
-$\theta$ by means of solving the bilevel problem
+$\theta$ within the context of image reconstruction by means of solving the 
+bilevel problem
 
 $$(P_{bilevel}) ~~~~~\inf_{\theta} F(u^{*}(\theta), u^{(0)}) ~~~ \text{s.t.}  
     ~~~ u^{*}(\theta)\in\operatorname{arginf}_{u}E(u, u^{(\delta)}, \theta)$$
 
-where $F$ refers to the outer loss function which quantifies the goodness of the 
-learned $\theta$ w.r.t. groundtruth data $u^{(0)}$. $E$ denotes the inner cost or 
+where $F$ refers to the upper loss function which quantifies the goodness of the 
+learned $\theta$ w.r.t. groundtruth data $u^{(0)}$. $E$ denotes the lower cost or 
 energy function, which is used to reconstruct clean data $u^{(0)}$ from noisy 
 observations $u^{(\delta)}$. We assume that $E$ is of the form
 
 $$E(u, u^{(\delta)}, \theta) = 
     \frac{1}{2\sigma^{2}}\|u - u^{(\delta)}\|_{2}^{2} + \lambda R(u, \theta)$$
 
-where $\sigma$ indicates the noise level, $R$ refers to a regulariser 
-(FoE model, ...) and $\lambda>0$ denotes a regularisation parameter.
+where $\sigma$ indicates the noise level, $R$ refers to a regulariser, in our case  
+a Fields of Experts (FoE) model, and $\lambda>0$ denotes a regularisation parameter. We 
+assume that the regulariser $R$ is given as follows: Let $k_{1}, \ldots, k_{m}$ denote 
+quadratic image filters, let $\rho(\cdot| \gamma)$ be a parameter-dependent potential 
+function and let $\gamma_{1}, \ldots, \gamma_{m}$ be potential parameters. Merging 
+filters and potential parameters into a single parameter $\theta$ we define
+
+$$R(u, \theta) = \sum_{j}\sum_{i}-\log\rho([k_{j} * u]_{i}|\gamma_{j}),$$
+
+where in the inner sum we sum up all elements of the $j$-th filter response.
 
 ## Table of contents
 
@@ -34,23 +43,32 @@ where $\sigma$ indicates the noise level, $R$ refers to a regulariser
 
 ### Current features
 
-- Gradient based solution of the $P_{bilevel}$ using implicit differentiation
-- PyTorch conformity: 
-- Modularity: The package is modulary by design. Its architecture allows easy    
-    customization and extension. Each of the core components   
-    - Measurement model
-    - Inner energy
-    - Regulariser
-    - Outer loss
-    - Optimiser
-    is encapsulated in its own module or optimiser class. Thus, all of these 
-    components can be exchanged easily without any need to modify  
-    the core logic.
-- Sample codes for denoising use cases
+- Image reconstruction using pretrained filter and potential models by solving the 
+problem $\operatorname{arginf}E(u, u^{(\delta)}, \theta)$ using one of the following methods
+  - NAG: Nesterov accelerated gradient method
+  - NAPG: Proximal gradient method with Nesterov acceleration
+  - Adam
+- Training of filters and/or potentials of an FoE model by solving the bilevel problem $P_{bilevel}$. The training
+relies on the application of one the following gradient-based methods onto the upper problem:
+  - Alternating NAG: NAG scheme used in alternating fashion to optimise filters and potentials
+  - Adam
+  - LBFGS
+To compute gradients of solutions of the lower level problem w.r.t. the parameter $\theta$, implicit differentiation
+or an unrolling scheme is used. The unrolling scheme is supported only if the lower problem is solved with NAG, or NAPG. 
+- Modularity and extensibility: The package is modulary by design. Its architecture allows easy customization and 
+extension. Each of the core components
+  - FieldsOfExperts
+  - ImageFilter
+  - Potential
+  - Energy
+is encapsulated in its own module. Thus, all of these components can be exchanged easily without any need to modify  
+the core logic. In addition, methods for the solution of the lower problem (`solve_lower.py`) and the upper problem
+(`solve_bilevel.py`) can easily be added.
+- The package contains pretrained models and sample scripts and notebooks showing the application of the package
+for image denoising.
 
 ### Upcoming features
 
-- Unrolling for solving inner problem
 - Sampling based approach for solving inner problem
 
 ## Installation
@@ -67,35 +85,51 @@ where $\sigma$ indicates the noise level, $R$ refers to a regulariser
     git clone ...
     ```
 
+## Core components 
+
+The FoE regulariser is implemented via the `FieldsOfExperts` class. It combines an `ImageFilter`, which defines the 
+convolutional filters applied to the image, and a subclass of `Potential`, which models the corresponding potential 
+functions. The lower problem is modelled by the PyTorch module `Energy`, which represents the energy function to be
+minimised. An object of this class contains an `M̀easurementModel` instance, a PyTorch module modeling the measurement 
+process, and a `FieldsOfExperts` instance as its components. 
+
+Image reconstruction or the solution of the lower level problem is carried out by the function `solve_lower()`. The 
+training of filters and potentials is managed by the class `BilevelOptimisation`.
+
+For the usage of the package and its methods see section [Usage](#usage).
+
 ## Usage
 
 ### Conceptual
 
+The interface of the function `solve_lower()` which is used to solve the lower level problem is designed 
+to closely follow the conventions of SciPy ([[2]](#2)) optimisation routines. Given an `Energy` instance, 
+the corresponding lower level problem can be solved using Nesterov's accelerated gradient method (NAG) via
+
 ```python
-from torch.utils.data import DataLoader
+lower_prob_result = solve_lower(energy=energy, method='nag', 
+                                options={'max_num_iterations': 1000, 'rel_tol': 1e-5, 'batch_optimisation': True})
+```
 
-from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
-from bilevel_optimisation.bilevel.Bilevel import Bilevel
-from bilevel_optimisation.losses.Losses import L2Loss
-from bilevel_optimisation.dataset.ImageDataset import ImageDataset
-from bilevel_optimisation.potential.Potential import Potential
-from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementModel
-from bilevel_optimisation.energy.InnerEnergy import InnerEnergy
+The upper-level optimisation, i.e. training of filters and potential parameters, follows conventions of scikit-learn
+for interface design and usability. Training these parameters using Adam for the upper level optimisation and NAPG 
+for the lower level optimisation is obtained via
 
-train_image_dataset = ImageDataset(train_data_root_dir)
+```python
 
-potential = Potential()
-image_filter = ImageFilter()
-regulariser = FieldsOfExperts(potential, image_filter)
-bilevel = Bilevel(L2Loss(), optimiser_class(regulariser.parameters()), solver_factory)
+prox = DenoisingProx(noise_level=noise_level)
+bilevel_optimisation = BilevelOptimisation(method_lower='napg',
+                                           options_lower={'max_num_iterations': 1000, 'rel_tol': 1e-5, 'prox': prox, 
+                                                          'batch_optimisation': False}, 
+                                           config, solver='cg', options_solver={'max_num_iterations': 500},
+                                           path_to_experiments_dir=path_to_eval_dir)
 
-train_loader = DataLoader(train_image_dataset, batch_size=batch_size)
-while not training_finished:
-  for batch in train_loader:
-    measurement_model = MeasurementModel(batch, forward_operator, noise_level)
-    inner_energy = InnerEnergy(measurement_model, regulariser, lam, optimiser_factory)
+bilevel_optimisation.learn(regulariser, lam, l2_loss_func, train_image_dataset,
+                           optimisation_method_upper='adam', 
+                           optimisation_options_upper={'max_num_iterations': 15000, 'lr': [1e-3, 1e-1], 
+                                                       'parameterwise': True},
+                           dtype=dtype, device=device, callbacks=callbacks)
 
-    loss = bilevel(outer_loss, inner_energy)
 ```
 
 ### Concrete
@@ -111,7 +145,6 @@ this comes at the cost of increased computation time.
   - Potential: 
     - Type: Student-t
     - Weights: Optimised using `BilevelOptimisation`
-  - Inner energy: `OptimisationEnergy`
 
   To run the script, execute
 
@@ -119,27 +152,22 @@ this comes at the cost of increased computation time.
     python examples/scripts/denoising_predict.py --configs example_prediction_I 
     ```
   
-  Alternatively, run the Jupyter notebook `example_denoising_predict.ipynb`.
+  Alternatively, run the Jupyter notebook `example_denoising_predict.ipynb`. Denoising the images `watercastle`
+  and `giraffe` of the well known BSDS300 dataset (see [[3]](#3)), we obtain
 
-  |                    Test triplet                    |                    Filter response                    |
-  |:--------------------------------------------------:|:-----------------------------------------------------:|
-  |  ![](images/results/prediction_I/test_triplet.jpg) | ![](images/results/prediction_I/filter_responses.png) |
+  | Method  | Options                                                                                                 | mean PSNR of denoised images [dB] |
+  |:-------:|:--------------------------------------------------------------------------------------------------------|:---------------------------------:|
+  |  'nag'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'batch_optimisation': True} ```                       |             28.79780              |
+  | 'napg'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'prox': ..., 'batch_optimisation': False} ```         |             28.77631              |
+  | 'adam'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-4, 'lr': [1e-3, 1e-3], 'batch_optimisation': False} ```  |             29.24183              |
+
+  and, when using the Adam optimiser:
+
+  ![](images/results/prediction_I/results.png)
 
 - **Example II** 
-  - Filters: Pretrained filters from [[1]](#1)
-  - Potential: 
-    - Type: Student-t
-    - Weights: Optimised using `BilevelOptimisation`
-  - Inner energy: `UnrollingEnergy`
 
-  To denoise images using the above configuration, execute
-  
-    ```
-    python examples/scripts/denoising_predict.py --configs example_prediction_II 
-    ```
-
-  The unrolling scheme denoises in satisfactory manner - the results to not differ significantly from the 
-  results obtained using the configuration example_prediction_I. 
+  ...
 
 #### Training of FoE models
 
@@ -152,11 +180,8 @@ this comes at the cost of increased computation time.
     - Weights:
       - Uniform initialisation
       - Trainable 
-  - Inner energy: `OptimisationEnergy`
-  - Optimiser:
-    - Inner: NAGOptimiser
-    - Outer: NAGOptimiser
-  
+  - Lower level 
+  - Upper level
   To run the training script, execute   
 
     ```
@@ -293,6 +318,23 @@ Chen, Y., Ranftl, R. and Pock, T., 2014.
 Insights into analysis operator learning: From patch-based sparse models to
 higher order MRFs. 
 IEEE Transactions on Image Processing, 23(3), pp.1060-1072.
+
+<a id="2">[2]</a>
+Pauli Virtanen, Ralf Gommers, Travis E. Oliphant, Matt Haberland, Tyler Reddy, 
+David Cournapeau, Evgeni Burovski, Pearu Peterson, Warren Weckesser, Jonathan Bright, 
+Stéfan J. van der Walt, Matthew Brett, Joshua Wilson, K. Jarrod Millman, 
+Nikolay Mayorov, Andrew R. J. Nelson, Eric Jones, Robert Kern, Eric Larson, 
+CJ Carey, İlhan Polat, Yu Feng, Eric W. Moore, Jake VanderPlas, Denis Laxalde, 
+Josef Perktold, Robert Cimrman, Ian Henriksen, E.A. Quintero, Charles R Harris, 
+Anne M. Archibald, Antônio H. Ribeiro, Fabian Pedregosa, 
+Paul van Mulbregt, and SciPy 1.0 Contributors, 2020.
+SciPy 1.0: Fundamental Algorithms for Scientific Computing in Python.
+Nature Methods, 17(3), 261-272.
+
+<a id="3">[3]</a>
+Martin, D., Fowlkes, C., Tal, D. and Malik, J., 2001, July. A database of human segmented natural images and 
+its application to evaluating segmentation algorithms and measuring ecological statistics. In Proceedings 
+eighth IEEE international conference on computer vision. ICCV 2001 (Vol. 2, pp. 416-423). IEEE.
 
 ## License
 

@@ -128,8 +128,92 @@ def build_gradient_func(func: Callable, batch_optim: bool, unrolling: bool=False
 
     return grad_func
 
-def solve_lower(energy: Energy, method: str,
-                options: Dict[str, Any]) -> LowerProblemResult:
+def solve_lower(energy: Energy, method: str, options: Dict[str, Any]) -> LowerProblemResult:
+    """
+
+    :param energy: Instance of class Energy which represents the lower problem.
+    :param method: String indicating which of the provided optimisation methods is used to solve the lower problem.
+        The following methods are implemented:
+        - 'nag' : Nestorov's accelerated gradient method.
+        - 'napg': Proximal gradient method with Nesterov acceleration.
+        - 'adam': Adam optimisation scheme
+    :param options: Options need to be provided in terms of a dictionary. The options required depend on the chosen
+        method.
+        - method == 'nag'
+          ---------------
+          max_num_iterations: int
+            Maximal number of iterations to perform
+          rel_tol: float, optional
+            Tolerance for early stopping of the optimisation scheme. If not provided, max_num_iterations iterations
+            will be performed.
+          batch_optimisation: bool, optional
+            Flag indicating if batch-optimisation or per-sample-optimisation is performed. Batch-optimisation performs
+            gradient steps on the full batch. Hence, only a single step size or a single Lipschitz constant, and a
+            single momentum parameter are required. Per-sample-optimisation performs for each sample of the batch an
+            independent gradient step. Consequently, each sample requires step size or Lipschitz constant, and a
+            momentum parameter.
+          alpha: List[float], optional
+            List of (constant) step sizes used in the optimisation scheme. If not specified, backtracking line search
+            to obtain sufficient descent along the direction of the negative gradient is applied. If specified, a
+            single step size must be provided when batch_optimisation is set to True; otherwise one step size per
+            sample must be provided.
+          beta: List[float], optional
+            List of (constant) momentum parameters. If not specified, the momentum parameter (for the full batch
+            and for each sample respectively) is computed on iteration level k as follows
+
+                theta_{k + 1} = 0.5 * (1 + math.sqrt(1 + 4 * (theta_{k} ** 2)))
+                beta_k = (theta_{k} - 1) / theta_{k + 1}
+
+            Similarly as for alpha, if beta is specified, it must be a list of a single element if batch_optimisation is
+            set to True; otherwise for each sample of the batch a momentum parameter needs to be provided.
+          lip_const: List[float], optional
+            List of initial Lipschitz constants used within the backtracking line search. A list of a single
+            element needs to be provided if batch_optimisation == True; a Lipschitz constant per sample must be
+            provided otherwise.
+            If lip_const and alpha are not specified, the defualt value 1e5 for the full batch optimisation or
+            per sample optimisation is used.
+        - method == 'napg'
+          ---------------
+          max_num_iterations: int
+            As for 'nag'
+          rel_tol: float, optional
+            As for 'nag'
+          batch_optimisation: bool, optional
+            As for 'nag'
+          alpha: List[float], optional
+            As for 'nag'
+          beta: List[float], optional
+            As for 'nag'
+          lip_const: List[float], optional
+            As for 'nag'
+          prox: torch.nn.Module
+            A PyTorch module which represents the proximal operator. Its forward function must take the arguments
+              u: torch.Tensor representing the item at which the operator shall be evaluated
+              tau: torch.Tensor representing the step size of the gradient step
+              u_noisy: torch.Tensor representing the noisy observation
+        - method == 'adam'
+          ---------------
+          max_num_iterations: int
+            As for 'nag'
+          batch_optimisation: bool, optional
+            This flag indicates, similarly as for 'nag', 'napg', if each sample of the batch should be treated
+            individually within the optimisation process. If set to True, for each sample separate hyperparameters (lr,
+            betas, weight_decay) are used. Note that per-sample optimisation is organised in this context by means
+            of different parameter groups, which in PyTorch are processed sequentially.
+          lr: List[float], optional
+            List of learning rates. If batch_optimisation is set to True, a list of a single value must be provided;
+            otherwise the list must contain a learning rate per sample of the batch. Per default, 1e-4 is used if
+            no specifications were made.
+          betas: List[Tuple[float, float]], optional
+            List of parameters used to compute moving average of first and second moments of gradients. If
+            batch_optimisation is set to True, a list of a single tuple of floats must be specified - in the other
+            case for each sample a tuple of floats must be specified. Per default the tuple (0.9, 0.999) is used.
+          weight_decay: List[float], optional
+            List of weights for L^2 penalisation. As for lr, betas a list of a single value or a list of values for
+            each sample must be provided. Per default the value 0.0 is used.
+    :return: Instance of class LowerProblemResult containing the solution tensor, the number of performed iterations,
+        the final loss, and a message indicating why iteration terminated.
+    """
     batch_optim = options.get('batch_optimisation', True)
 
     if method == 'nag':

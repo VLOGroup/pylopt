@@ -194,13 +194,10 @@ def make_gradient_step(param: torch.nn.Parameter, grads: torch.Tensor, alpha: to
     param.sub_(alpha_ * grads)
     if hasattr(param, 'prox'):
         param.data.copy_(param.prox(param.data, alpha_))
-
-        # TODO:
-        #   > handle all the other attributes (projections)
-
-    #             if hasattr(p, 'zero_mean_projection'):
-    #                 p.data.copy_(p.proj(p.data))
-
+    if hasattr(param, 'zero_mean_projection'):
+        param.data.copy_(param.zero_mean_projection(param))
+    if hasattr(param, 'orthogonal_projection'):
+        param.data.copy_(param.orthogonal_projection(param))
 
 def backtracking_line_search(param: torch.nn.Parameter, grads: torch.Tensor, closure,
                              lip_const: torch.Tensor, rho_1: float, rho_2: float, max_num_iterations: int=10) -> torch.Tensor:

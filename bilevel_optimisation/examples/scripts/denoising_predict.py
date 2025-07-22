@@ -12,6 +12,7 @@ from bilevel_optimisation.filters import ImageFilter
 from bilevel_optimisation.lower_problem import solve_lower
 from bilevel_optimisation.measurement_model import MeasurementModel
 from bilevel_optimisation.potential import StudentT
+from bilevel_optimisation.proximal_maps.ProximalOperator import DenoisingProx
 from bilevel_optimisation.utils.config_utils import load_app_config, parse_datatype
 from bilevel_optimisation.utils.dataset_utils import collate_function
 from bilevel_optimisation.utils.evaluation_utils import compute_psnr
@@ -67,24 +68,24 @@ def denoise(config: Configuration):
     u_clean = list(test_loader)[0]
     u_clean = u_clean.to(device=device, dtype=dtype)
 
-
-    measurement_model = MeasurementModel(u_clean, config)
+    measurement_model = MeasurementModel(u_clean, config=config)
     lam = config['energy']['lam'].get()
     energy = Energy(measurement_model, regulariser, lam)
     energy.to(device=device, dtype=dtype)
 
-            # options_adam = {'max_num_iterations': 1000, 'rel_tol': 1e-4, 'lr': [1e-3, 1e-4], 'batch_optimisation': False}
-            # options_nag = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.71], 'batch_optimisation': True}
-            # options_nag = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.71, 0.87], 'batch_optimisation': False}
-            # options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'beta': [0.9, 0.9], 'alpha': [0.0001, 0.001], 'batch_optimisation': False}
-    options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-3, 'beta': [0.9], 'lip_const': [1000]}
-            # options_nag_unrolling = {'max_num_iterations': 10, 'rel_tol': 1e-5, 'alpha': [1e-3, 1e-7], 'batch_optimisation': False}
-            # options_napg_unrolling = {'max_num_iterations': 10, 'rel_tol': 1e-5, 'alpha': [1e-7], 'batch_optimisation': True}
-            # options_nag_unrolling = {'max_num_iterations': 10, 'rel_tol': 1e-5, 'lip_const': [1e4]}
+
+    options_nag = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'batch_optimisation': True}
+
+    noise_level = config['measurement_model']['noise_level'].get()
+    prox = DenoisingProx(noise_level=noise_level)
+    options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'prox': prox, 'batch_optimisation': False}
+
+    options_adam = {'max_num_iterations': 1000, 'rel_tol': 1e-4, 'lr': [1e-3, 1e-3], 'batch_optimisation': False}
 
     with Timer(device=device) as t:
-        lower_prob_result = solve_lower(energy=energy, method='napg', options=options_napg)
-
+        # lower_prob_result = solve_lower(energy=energy, method='nag', options=options_nag)
+        # lower_prob_result = solve_lower(energy=energy, method='napg', options=options_napg)
+        lower_prob_result = solve_lower(energy=energy, method='adam', options=options_adam)
     print('denoising stats:')
     print(' > elapsed time [ms] = {:.5f}'.format(t.time_delta()))
     print(' > number of iterations = {:d}'.format(lower_prob_result.num_iterations))
