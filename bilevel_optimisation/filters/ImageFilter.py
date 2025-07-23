@@ -11,6 +11,15 @@ def zero_mean_projection(x: torch.Tensor) -> torch.Tensor:
 
 def orthogonal_projection_procrustes(x: torch.Tensor, eps: float=1e-7, max_num_iterations: int=5,
                                      rel_tol: float=1e-5) -> torch.Tensor:
+    """
+    Function which applies the orthogonal procrustes scheme to orthogonalise a set/batch of filters
+
+    :param x: Filter tensor of shape [batch_size, 1, filter_dim, filter_dim]
+    :param eps:
+    :param max_num_iterations: Maximal number of iterations
+    :param rel_tol: Tolerance used to stop iteration as soon the norm of subsequent iterates is less than rel_tol.
+    :return: Orthogonalised set of filters in terms of a tensor of the same shape as the input tensor.
+    """
     x_flattened = [x[i, 0, :, :].flatten() for i in range(0, x.shape[0])]
     x_stacked = torch.stack(x_flattened, dim=1)
     m, n = x_stacked.shape
@@ -34,7 +43,16 @@ def orthogonal_projection_procrustes(x: torch.Tensor, eps: float=1e-7, max_num_i
     return torch.stack(x_orthogonal, dim=0).unsqueeze(dim=1)
 
 class ImageFilter(torch.nn.Module):
-    def __init__(self, config: Configuration):
+    """
+    Class modelling quadratic image filters by means of a PyTorch module.
+
+    """
+    def __init__(self, config: Configuration) -> None:
+        """
+        Initialisation of class ImageFilter.
+
+        :param config: Configuration object. See bilevel_optimisation/config_data for sample configuration files.
+        """
         super().__init__()
 
         self.filter_dim = config['image_filter']['filter_dim'].get()
@@ -56,8 +74,10 @@ class ImageFilter(torch.nn.Module):
                 filter_data = torch.tensor(dct_basis)
             elif initialisation_mode == 'randn':
                 filter_data = torch.randn(self.filter_dim ** 2 - 1, 1, self.filter_dim, self.filter_dim)
-            else:
+            elif initialisation_mode == 'rand':
                 filter_data = 2 * torch.rand(self.filter_dim ** 2 - 1, 1, self.filter_dim, self.filter_dim) - 1
+            else:
+                raise ValueError('Unknown initialisation method.')
             self.filter_tensor = torch.nn.Parameter(data=filter_data, requires_grad=trainable)
         else:
             dummy_data = torch.ones(self.filter_dim ** 2 - 1, 1, self.filter_dim, self.filter_dim)

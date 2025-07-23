@@ -1,4 +1,4 @@
-from typing import Optional, Dict, Any, Callable, Tuple
+from typing import Optional, Dict, Any, Callable, Tuple, List
 from abc import ABC
 import torch
 from torch.utils.tensorboard import SummaryWriter
@@ -8,7 +8,6 @@ import os
 import math
 from matplotlib import pyplot as plt
 from matplotlib import colormaps as cmaps
-from matplotlib.ticker import MultipleLocator
 import io
 from PIL import Image
 import logging
@@ -97,6 +96,10 @@ class PlotFiltersAndPotentials(Callback):
 
     def _plot_filters(self, step: int, regulariser: FieldsOfExperts):
         filters = regulariser.get_image_filter().get_filter_tensor()
+        filter_norms = [torch.linalg.norm(fltr).detach().cpu().item() for fltr in filters]
+
+        filter_indices_sorted = np.argsort(filter_norms)[::-1].tolist()
+
         num_filters = filters.shape[0]
         num_filters_sqrt = int(math.sqrt(num_filters)) + 1
         fig, axes = plt.subplots(num_filters_sqrt, num_filters_sqrt, figsize=(11, 11),
@@ -106,12 +109,12 @@ class PlotFiltersAndPotentials(Callback):
             for j in range(0, num_filters_sqrt):
                 filter_idx = i * num_filters_sqrt + j
                 if filter_idx < num_filters:
-                    filter_norm = torch.linalg.norm(filters[filter_idx]).detach().cpu().item()
+                    idx = filter_indices_sorted[filter_idx]
 
-                    fltr = self._normalise_filter(filters[filter_idx, :, :, :].squeeze().detach().clone())
+                    fltr = self._normalise_filter(filters[idx, :, :, :].squeeze().detach().clone())
                     axes[i, j].imshow(fltr.cpu().numpy(), cmap=cmaps['gray'])
 
-                    title = 'idx={:d}, \nnorm={:.3f}'.format(filter_idx, filter_norm)
+                    title = 'idx={:d}, \nnorm={:.3f}'.format(idx, filter_norms[idx])
                     axes[i, j].set_title(title, fontsize=8)
                     axes[i, j].axis('off')
                 else:
@@ -125,10 +128,13 @@ class PlotFiltersAndPotentials(Callback):
     def _plot_potentials(self, step: int, regulariser: FieldsOfExperts, device: Optional[torch.device],
                          dtype: Optional[torch.dtype]):
         if device is not None and dtype is not None:
+            filters = regulariser.get_image_filter().get_filter_tensor()
+            filter_norms = [torch.linalg.norm(fltr).detach().cpu().item() for fltr in filters]
+            filter_indices_sorted = np.argsort(filter_norms)[::-1].tolist()
+
             x_lower = -1.0
             x_upper = 1.0
 
-            filters = regulariser.get_image_filter().get_filter_tensor()
             potential = regulariser.get_potential()
             potential_weight_tensor = potential.get_parameters()
             num_marginals = potential.get_num_marginals()
@@ -140,15 +146,16 @@ class PlotFiltersAndPotentials(Callback):
                 for j in range(0, num_marginals_sqrt):
                     potential_idx = i * num_marginals_sqrt + j
                     if potential_idx < potential.get_num_marginals():
-                        filter_nrm = torch.linalg.norm(filters[potential_idx, 0, :, :])
+                        idx = filter_indices_sorted[potential_idx]
+
                         t = torch.linspace(x_lower, x_upper, 101).to(device=device, dtype=dtype)
-                        y = potential.forward_negative_log_marginal(t * filter_nrm, potential_idx)
+                        y = potential.forward_negative_log_marginal(t * filter_norms[idx], idx)
 
                         axes[i, j].plot(t.detach().cpu().numpy(), y.detach().cpu().numpy() -
                                         torch.min(y).detach().cpu().numpy(), color='blue')
 
                         potential_weight = potential_weight_tensor[potential_idx].detach().cpu().item()
-                        axes[i, j].set_title('idx={:d}, \nweight={:.3f}'.format(potential_idx, potential_weight),
+                        axes[i, j].set_title('idx={:d}, \nweight={:.3f}'.format(idx, potential_weight),
                                              fontsize=8)
                         axes[i, j].set_xlim(x_lower, x_upper)
                     else:
@@ -213,13 +220,13 @@ class TrainingMonitor(Callback):
                     name = group.get('name', '')
                     lip_const = group.get('lip_const', -1)
                     logging.info('[{:s}] lipschitz constant for group {:s}: '
-                                 '{:.3f}'.format(self.__class__.__name__, name, lip_const))
+                                 '{:.3f}'.format(self.__class__.__name__, name, lip_const[-1]))
                     if not name in self.lip_const_dict.keys():
                         self.lip_const_dict[name] = []
                     self.lip_const_dict[name].append(lip_const)
 
                     if self.tb_writer:
-                        self.tb_writer.add_scalar('lip_const/{:s}'.format(name), lip_const, step + 1)
+                        self.tb_writer.add_scalar('lip_const/{:s}'.format(name), lip_const[-1], step + 1)
 
             if regulariser is not None:
                 device = kwargs.get('device', None)
@@ -280,7 +287,7 @@ class TrainingMonitor(Callback):
             test_batch_clean = list(self.test_loader)[0]
             test_batch_clean_ = test_batch_clean.to(device=device, dtype=dtype)
 
-            measurement_model = MeasurementModel(test_batch_clean_, self.config)
+            measurement_model = MeasurementModel(test_batch_clean_, config=self.config)
             energy = Energy(measurement_model, regulariser, self.config['energy']['lam'].get())
             energy.to(device=device, dtype=dtype)
 

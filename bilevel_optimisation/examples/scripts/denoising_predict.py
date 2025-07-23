@@ -73,19 +73,20 @@ def denoise(config: Configuration):
     energy = Energy(measurement_model, regulariser, lam)
     energy.to(device=device, dtype=dtype)
 
-
-    options_nag = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'batch_optimisation': True}
-
-    noise_level = config['measurement_model']['noise_level'].get()
-    prox = DenoisingProx(noise_level=noise_level)
-    options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'prox': prox, 'batch_optimisation': False}
-
-    options_adam = {'max_num_iterations': 1000, 'rel_tol': 1e-4, 'lr': [1e-3, 1e-3], 'batch_optimisation': False}
-
+    method = 'nag'
+    if method == 'nag':
+        options = {'max_num_iterations': 1000, 'rel_tol': 1e-4, 'batch_optimisation': False}
+    elif method == 'napg':
+        noise_level = config['measurement_model']['noise_level'].get()
+        prox = DenoisingProx(noise_level=noise_level)
+        options = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'prox': prox, 'batch_optimisation': False}
+    elif method == 'adam':
+        options = {'max_num_iterations': 1000, 'rel_tol': 5e-4, 'lr': [1e-3, 1e-3], 'batch_optimisation': False}
+    else:
+        raise ValueError('Unknown solution method for lower level problem')
     with Timer(device=device) as t:
-        # lower_prob_result = solve_lower(energy=energy, method='nag', options=options_nag)
-        # lower_prob_result = solve_lower(energy=energy, method='napg', options=options_napg)
-        lower_prob_result = solve_lower(energy=energy, method='adam', options=options_adam)
+        lower_prob_result = solve_lower(energy=energy, method=method, options=options)
+
     print('denoising stats:')
     print(' > elapsed time [ms] = {:.5f}'.format(t.time_delta()))
     print(' > number of iterations = {:d}'.format(lower_prob_result.num_iterations))

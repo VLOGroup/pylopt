@@ -12,8 +12,16 @@ class MeasurementModel(torch.nn.Module):
         stored as a non-trainable parameter.
 
         :param u_clean: Tensor of shape [batch_size, channels, height, width]
-        :param kwargs
-        :config
+        :param kwargs: Keyword arguments used for the initialisation per config or per arguments. For the initialistion
+            a config specifying operator and noise level, or both the arguments, operator and noise level must
+            be specified.
+
+            config: confuse.Configuration
+              See bilevel_optimisation/config_data for sample configs
+            operator: torch.nn.Module
+              PyTorch module representing the forward operator of the image reconstruction problem. Its forward
+              function must take a torch tensor as input and must return a torch tensor.
+            noise_level: float
         """
         super().__init__()
         self.u_clean = torch.nn.Parameter(u_clean, requires_grad=False)
@@ -49,9 +57,6 @@ class MeasurementModel(torch.nn.Module):
 
     def get_noisy_observation(self) -> torch.nn.Parameter:
         return self.u_noisy
-
-    def set_noisy_observation(self, noisy_obs: torch.Tensor):
-        self.u_noisy.copy_(noisy_obs)
 
     def _data_fidelity(self, u: torch.Tensor) -> torch.Tensor:
         """

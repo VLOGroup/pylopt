@@ -21,8 +21,10 @@ class StudentT(Potential):
         if not model_path:
             if initialisation_mode == 'rand':
                 weights = torch.log(multiplier * torch.rand(num_marginals))
-            else:
+            elif initialisation_mode == 'uniform':
                 weights = torch.log(multiplier * torch.ones(num_marginals))
+            else:
+                raise ValueError('Unknown initialisation method')
             self.weight_tensor = torch.nn.Parameter(data=weights, requires_grad=trainable)
 
         else:

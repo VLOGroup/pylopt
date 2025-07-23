@@ -11,13 +11,11 @@ def scalar_product_l2(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
 
 class CGSolver(LinearSystemSolver):
 
-    def __init__(self, max_num_iterations: int=500, abs_tol: float = 1e-5, rel_tol: float = 1e-5,
-                 scalar_product: Callable = None) -> None:
+    def __init__(self, max_num_iterations: int=500, abs_tol: float = 1e-5, scalar_product: Callable = None) -> None:
         super().__init__()
 
         self._max_num_iterations = max_num_iterations
         self._absolute_tolerance = abs_tol
-        self._relative_tolerance = rel_tol
 
         self._scalar_product = scalar_product if scalar_product is not None else scalar_product_l2
 

@@ -2,22 +2,22 @@ from typing import Callable, Any, Optional, Dict, List, Tuple
 import torch
 from torch.utils.data import DataLoader
 import logging
-import os
 from confuse import Configuration
 from itertools import chain
 
-from bilevel_optimisation.bilevel_problem.gradients import OptimisationAutogradFunction, UnrollingAutogradFunction
+from bilevel_optimisation.bilevel_problem.gradients import ImplicitAutogradFunction, UnrollingAutogradFunction
 from bilevel_optimisation.callbacks import Callback
 from bilevel_optimisation.energy.Energy import Energy
 from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
 from bilevel_optimisation.lower_problem import add_group_options
 from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementModel
-from bilevel_optimisation.optimise import step_adam, create_projected_optimiser, step_nag
+from bilevel_optimisation.optimise import step_adam, create_projected_optimiser, step_nag_lower
 from bilevel_optimisation.optimise.optimise_adam import harmonise_param_groups_adam
 from bilevel_optimisation.optimise.optimise_nag import harmonise_param_groups_nag
 from bilevel_optimisation.solver.CGSolver import CGSolver
 from bilevel_optimisation.utils.dataset_utils import collate_function
-from bilevel_optimisation.utils.file_system_utils import dump_config_file
+from bilevel_optimisation.utils.file_system_utils import dump_config_file, create_experiment_dir
+
 
 def assemble_param_groups_base(regulariser: FieldsOfExperts, alternating: bool=False):
     param_dict = {}
@@ -91,25 +91,54 @@ def assemble_param_groups_lbfgs(regulariser: FieldsOfExperts, lr: Optional[List[
 
 
 class BilevelOptimisation:
+    """
+    This class implements the routines for the training of filters and/or potentials of a FoE model. For the training
+    gradient based methods are considered, where gradients are computed using implicit differentiation or
+    an unrolling scheme. The unrolling scheme requires that the lower level problem is solved using NAG or NAPG.
+    """
     def __init__(self, method_lower: str, options_lower: Dict[str, Any], config: Configuration,
-                 solver: Optional[str]='cg', options_solver: Optional[Dict[str, Any]]=None,
+                 differentiation_method: str='implicit', solver: Optional[str]='cg',
+                 options_solver: Optional[Dict[str, Any]]=None,
                  path_to_experiments_dir: Optional[str]=None) -> None:
-        if solver == 'cg':
-            options_solver = options_solver if options_solver is not None else {}
-            self.solver = CGSolver(**options_solver)
-        else:
-            raise NotImplementedError
+        """
+        Initialisation of BilevelOptimisation.
 
-        self.backward_mode = 'optimisation'
-        if 'unrolling' in method_lower:
-            self.backward_mode = 'unrolling'
+        :param method_lower: String indicating the solution method for the lower level problem.
+        :param options_lower: Dictionary of options for the solution of the lower level problem
+        :param config: Configuration object for the setup of measurement model and energy
+        :param differentiation_method: String indicating which differentiation method is used, implicit differentiation
+            or unrolling. If implicit differentiation is used, a linear system solver must be chosen. The default
+            option is implicit differentiation.
+        :param solver: String indicating the linear system solver which is used to compute gradients when implicit
+            differentiation is applied. The default option is 'cg'.
+        :param options_solver: Dictionary of options for the linear system solver. The cg solver takes the
+            options
+                max_num_iterations: int, optional
+                    Maximal number of cg iterations; the default value equals 500.
+                abs_tol: float, optional
+                    Tolerance used for early stopping: Iteration is stopped if the cg residual is <= abs_tol. Per
+                    default the tolerance value 1e-5 is used.
+        :param path_to_experiments_dir: Path to experiment directory where intermediate results, optimisation stats, ecc.
+            will be stored. If not provided, an experiment directory in the root directory of this python
+            project is created.
+        """
+        self.backward_mode = differentiation_method
 
         self.method_lower = method_lower
         self.options_lower = options_lower
 
-        self.path_to_experiments_dir = os.getcwd() if path_to_experiments_dir is None else path_to_experiments_dir
         self.config = config
+        self.path_to_experiments_dir = create_experiment_dir(self.config) if path_to_experiments_dir is None \
+            else path_to_experiments_dir
         dump_config_file(self.config, self.path_to_experiments_dir)
+
+        if solver == 'cg':
+            options_solver = options_solver if options_solver is not None else {}
+            self.solver = CGSolver(**options_solver)
+        elif solver == 'your_custom_solver':
+            pass
+        else:
+            raise ValueError('Unknown linear system solver')
 
     def _loss_func_factory(self, upper_loss: Callable, energy: Energy, u_clean: torch.Tensor) -> Callable:
         if self.backward_mode == 'unrolling':
@@ -120,7 +149,7 @@ class BilevelOptimisation:
         else:
             def func(*params: torch.nn.Parameter) -> torch.Tensor:
                 upper_loss_func = lambda z: upper_loss(u_clean, z)
-                return OptimisationAutogradFunction.apply(energy, self.method_lower, self.options_lower,
+                return ImplicitAutogradFunction.apply(energy, self.method_lower, self.options_lower,
                                                           upper_loss_func, self.solver,
                                                           *params)
 
@@ -147,7 +176,7 @@ class BilevelOptimisation:
         elif optimisation_method_upper == 'your_custom_method':
             pass
         else:
-            raise NotImplementedError
+            raise ValueError('Unknown optimisation method for upper level problem.')
 
     @torch.no_grad()
     def _learn_nag(self, regulariser: FieldsOfExperts, lam: float, upper_loss: Callable,
@@ -168,7 +197,7 @@ class BilevelOptimisation:
        try:
            for k, batch in enumerate(train_loader):
                batch_ = batch.to(dtype=dtype, device=device)
-               measurement_model = MeasurementModel(batch_, self.config)
+               measurement_model = MeasurementModel(batch_, config=self.config)
 
                energy = Energy(measurement_model, regulariser, lam)
                energy = energy.to(device=device, dtype=dtype)
@@ -178,7 +207,7 @@ class BilevelOptimisation:
                    with torch.enable_grad():
                        loss_ = func(*params)
                    return list(torch.autograd.grad(outputs=loss_, inputs=params))
-               loss = step_nag(func, grad_func, param_groups_)
+               loss = step_nag_lower(func, grad_func, param_groups_)
 
                for cb in callbacks:
                    cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)
@@ -227,7 +256,7 @@ class BilevelOptimisation:
                     func = self._loss_func_factory(upper_loss, energy, batch_)
                     loss = step_adam(optimiser, func, param_groups_)
 
-                    # scheduler.step()
+                    scheduler.step()
 
                     for cb in callbacks:
                         cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)

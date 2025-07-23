@@ -9,7 +9,7 @@ def dump_config_file(config: Configuration, path_to_data_dir: str):
     with open(config_file_path, 'w') as file:
         file.write(str(config_data))
 
-def create_evaluation_dir(config: Configuration) -> str:
+def create_experiment_dir(config: Configuration) -> str:
     experiments_root_dir = config['data']['experiments']['root_dir'].get()
     if not experiments_root_dir:
         package_root_path = Path(__file__).resolve().parents[2]

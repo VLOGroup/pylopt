@@ -24,13 +24,15 @@ def add_prox(prox_operator: Optional[torch.nn.Module], param_groups: List[Dict[s
 
 def assemble_param_groups_nag(u: torch.Tensor, alpha: List[Optional[float]]=None,
                               beta: List[Optional[float]]=None, lip_const: List[float]=None,
-                              **unknown_options) -> List[Dict[str, Any]]:
+                              batch_optimisation: bool=True, **unknown_options) -> List[Dict[str, Any]]:
     u_ = u.detach().clone()
     param_groups = [{'params': [torch.nn.Parameter(u_, requires_grad=True)]}]
 
-    alpha = [None for _ in range(u.shape[0])] if not alpha else alpha
-    beta = [None for _ in range(u.shape[0])] if not beta else beta
-    lip_const = [None for _ in range(u.shape[0])] if not lip_const else lip_const
+    num_optimisation_variables = 1 if batch_optimisation else u.shape[0]
+
+    alpha = [None for _ in range(0, num_optimisation_variables)] if not alpha else alpha
+    beta = [None for _ in range(0, num_optimisation_variables)] if not beta else beta
+    lip_const = [None for _ in range(0, num_optimisation_variables)] if not lip_const else lip_const
 
     add_group_options(param_groups, {'alpha': alpha, 'beta': beta, 'lip_const': lip_const})
     return param_groups
@@ -271,7 +273,7 @@ def solve_lower(energy: Energy, method: str, options: Dict[str, Any]) -> LowerPr
         #       lower_prob_result = LowerProblemResult(...)
         pass
     else:
-        raise NotImplementedError
+        raise ValueError('Unknown solution method for lower level problem.')
 
     return lower_prob_result
 

@@ -27,8 +27,7 @@ def compute_hvp_mixed(energy: Energy, u: torch.Tensor, v: torch.Tensor) -> List[
                                     outputs=de_dx, grad_outputs=v)
     return list(d2e_mixed)
 
-
-class OptimisationAutogradFunction(Function):
+class ImplicitAutogradFunction(Function):
     """
     Subclass of torch.autograd.Function. It implements the implicit differentiation scheme
     to compute the gradients of optimiser of the inner problem w.r.t. to the parameters
@@ -114,7 +113,7 @@ class OptimisationAutogradFunction(Function):
         energy = ctx.energy
         outer_loss_func = ctx.loss_func
         solver = ctx.solver
-        lagrange_multiplier = OptimisationAutogradFunction.compute_lagrange_multiplier(outer_loss_func, energy,
+        lagrange_multiplier = ImplicitAutogradFunction.compute_lagrange_multiplier(outer_loss_func, energy,
                                                                                        u_denoised, solver)
         grad_params = compute_hvp_mixed(energy, u_denoised.detach(), lagrange_multiplier)
 

@@ -265,8 +265,9 @@ def optimise_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[st
     num_iterations = max_num_iterations
     param_groups_ = harmonise_param_groups_nag(param_groups, break_graph=True)
 
+    loss = -1 * torch.ones(1)
     for k in range(0, max_num_iterations):
-        _ = step_nag_lower(func, grad_func, param_groups_)
+        loss = step_nag_lower(func, grad_func, param_groups_)
 
         if rel_tol:
             rel_error = compute_relative_error(param_groups_)
@@ -276,7 +277,7 @@ def optimise_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[st
                 break
 
     result = OptimiserResult(solution=param_groups_, num_iterations=num_iterations,
-                             loss=func(*flatten_groups(param_groups_)))
+                             loss=loss)
     return result
 
 def optimise_nag_unrolling(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]],
