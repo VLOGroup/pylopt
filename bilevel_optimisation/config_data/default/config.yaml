@@ -15,10 +15,12 @@ data:
 image_filter:
   filter_dim: 7
   padding_mode: 'reflect'
+  enforce_orthogonality: False
   initialisation:
     mode: 'dct'
     file_path: ''
-  multiplier: 1.0
+    multiplier: 1.0
+    normalise: False
   trainable: False
 
 potential:
@@ -26,7 +28,7 @@ potential:
     initialisation:
       mode: 'uniform'
       file_path: ''
-    multiplier: 1.0
+      multiplier: 1.0
     trainable: False
 
 measurement_model:

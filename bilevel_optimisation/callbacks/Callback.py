@@ -218,12 +218,12 @@ class TrainingMonitor(Callback):
             if param_groups:
                 for group in param_groups:
                     name = group.get('name', '')
-                    lip_const = group.get('lip_const', -1)
+                    lip_const = group.get('lip_const', [-1])
                     logging.info('[{:s}] lipschitz constant for group {:s}: '
                                  '{:.3f}'.format(self.__class__.__name__, name, lip_const[-1]))
                     if not name in self.lip_const_dict.keys():
                         self.lip_const_dict[name] = []
-                    self.lip_const_dict[name].append(lip_const)
+                    self.lip_const_dict[name].append(lip_const[-1])
 
                     if self.tb_writer:
                         self.tb_writer.add_scalar('lip_const/{:s}'.format(name), lip_const[-1], step + 1)

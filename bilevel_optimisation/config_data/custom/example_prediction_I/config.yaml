@@ -11,7 +11,8 @@ image_filter:
 potential:
   student_t:
     initialisation:
-      file_path: '/home/florianthaler/Documents/research/bilevel_optimisation/bilevel_optimisation/model_data/student_t_potential_thaler_2025.pt'
+      file_path: '/home/florianthaler/Documents/research/bilevel_optimisation/bilevel_optimisation/model_data/potential_iter_11.pt'
+    trainable: True
 
 energy:
   lam: 10

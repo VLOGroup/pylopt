@@ -9,14 +9,13 @@ data:
 image_filter:
   initialisation:
     file_path: '/home/florianthaler/Documents/research/bilevel_optimisation/bilevel_optimisation/model_data/foe_filters_7x7_chen-ranftl-pock_2014_scaled.pt'
-  multiplier: 1
 
 potential:
   student_t:
     initialisation:
       mode: 'uniform'
+      multiplier: 0.0005
     trainable: True
-    multiplier: 0.0005
 
 energy:
   lam: 10

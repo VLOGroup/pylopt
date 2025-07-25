@@ -73,15 +73,20 @@ def denoise(config: Configuration):
     energy = Energy(measurement_model, regulariser, lam)
     energy.to(device=device, dtype=dtype)
 
-    method = 'nag'
+    method = 'napg_unrolling'
     if method == 'nag':
         options = {'max_num_iterations': 1000, 'rel_tol': 1e-4, 'batch_optimisation': False}
     elif method == 'napg':
         noise_level = config['measurement_model']['noise_level'].get()
         prox = DenoisingProx(noise_level=noise_level)
-        options = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'prox': prox, 'batch_optimisation': False}
+        options = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'prox': prox, 'beta': 0.71, 'alpha': 1e-4,
+                   'batch_optimisation': True}
     elif method == 'adam':
-        options = {'max_num_iterations': 1000, 'rel_tol': 5e-4, 'lr': [1e-3, 1e-3], 'batch_optimisation': False}
+        options = {'max_num_iterations': 1000, 'rel_tol': 5e-4, 'lr': 1e-3, 'batch_optimisation': False}
+    elif method == 'nag_unrolling':
+        options = {'max_num_iterations': 35, 'lip_const': 10, 'batch_optimisation': False}
+    elif method == 'napg_unrolling':
+        options = {'max_num_iterations': 35, 'lip_const': 10, 'batch_optimisation': False}
     else:
         raise ValueError('Unknown solution method for lower level problem')
     with Timer(device=device) as t:

@@ -10,10 +10,14 @@ from bilevel_optimisation.dataset.ImageDataset import TestImageDataset, Training
 from bilevel_optimisation.fields_of_experts import FieldsOfExperts
 from bilevel_optimisation.filters import ImageFilter
 from bilevel_optimisation.potential import StudentT
+from bilevel_optimisation.proximal_maps.ProximalOperator import DenoisingProx
 from bilevel_optimisation.utils.logging_utils import setup_logger
 from bilevel_optimisation.utils.seeding_utils import seed_random_number_generators
-from bilevel_optimisation.utils.file_system_utils import create_evaluation_dir
+from bilevel_optimisation.utils.file_system_utils import create_experiment_dir
 from bilevel_optimisation.utils.config_utils import parse_datatype, load_app_config
+
+def l2_loss_func(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
+    return 0.5 * torch.sum((x - y) ** 2)
 
 def bilevel_learn(config: Configuration):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
@@ -28,28 +32,44 @@ def bilevel_learn(config: Configuration):
     potential = StudentT(image_filter.get_num_filters(), config)
     regulariser = FieldsOfExperts(potential, image_filter)
 
-    method_lower = 'napg'
-    options_lower = {'max_num_iterations': 300, 'rel_tol': None, 'lip_const': [1e5]}
-    path_to_eval_dir = create_evaluation_dir(config)
+    method_lower = 'adam'
+    if method_lower == 'nag':
+        options_lower = {'max_num_iterations': 300, 'rel_tol': 1e-5, 'lip_const': 1e5, 'batch_optimisation': False}
+    elif method_lower == 'napg':
+        noise_level = config['measurement_model']['noise_level'].get()
+        options_lower = {'max_num_iterations': 300, 'rel_tol': 1e-5, 'lip_const': 1e5,
+                         'prox': DenoisingProx(noise_level=noise_level), 'batch_optimisation': True}
+    elif method_lower == 'adam':
+        options_lower = {'max_num_iterations': 1000, 'rel_tol': 5e-4, 'lr': 1e-3, 'batch_optimisation': True}
+    else:
+        raise ValueError('Unknown solution method for lower level problem.')
+
+    path_to_eval_dir = create_experiment_dir(config)
     bilevel_optimisation = BilevelOptimisation(method_lower, options_lower, config, solver='cg',
+                                               differentiation_method='implicit',
                                                options_solver={'max_num_iterations': 500},
                                                path_to_experiments_dir=path_to_eval_dir)
     lam = config['energy']['lam'].get()
-    func = lambda x, y: 0.5 * torch.sum((x - y) ** 2)
 
     tb_writer = SummaryWriter(log_dir=os.path.join(path_to_eval_dir, 'tensorboard'))
     callbacks = [PlotFiltersAndPotentials(path_to_data_dir=path_to_eval_dir, plotting_freq=2, tb_writer=tb_writer),
                  SaveModel(path_to_data_dir=path_to_eval_dir, save_freq=2),
-                 TrainingMonitor(test_image_dataset, config, method_lower, options_lower, func, path_to_eval_dir,
+                 TrainingMonitor(test_image_dataset, config, method_lower, options_lower, l2_loss_func, path_to_eval_dir,
                                     evaluation_freq=2, tb_writer=tb_writer)]
-    optimisation_options_nag = {'max_num_iterations': 50, 'lip_const': [1]}
-            # optimisation_options_adam = {'max_num_iterations': 3000, 'lr': [1e-3, 1e-1], 'parameterwise': True}
-    optimisation_options_adam = {'max_num_iterations': 3000, 'lr': [1e-3], 'parameterwise': True}
-            # optimisation_options_lbfgs = {'max_num_iterations': 500, 'max_iter': [10], 'history_size': [10],
-            #                               'line_search_fn': ['strong_wolfe']}
 
-    bilevel_optimisation.learn(regulariser, lam, func, train_image_dataset,
-                               optimisation_method_upper='nag', optimisation_options_upper=optimisation_options_nag,
+    method_upper = 'adam'
+    if method_upper == 'nag':
+        options_upper = {'max_num_iterations': 50, 'lip_const': [1]}
+    elif method_upper == 'adam':
+        options_upper = {'max_num_iterations': 3000, 'lr': [1e-3], 'alternating': True}
+    elif method_upper == 'lbfgs':
+        options_upper = {'max_num_iterations': 500, 'max_iter': 10, 'history_size': 10,
+                         'line_search_fn': 'strong_wolfe'}
+    else:
+        raise ValueError('Unknown optimisation method for upper level problem.')
+
+    bilevel_optimisation.learn(regulariser, lam, l2_loss_func, train_image_dataset,
+                               optimisation_method_upper=method_upper, optimisation_options_upper=options_upper,
                                dtype=dtype, device=device, callbacks=callbacks)
 
 def main():

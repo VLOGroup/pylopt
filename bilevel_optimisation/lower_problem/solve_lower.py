@@ -6,10 +6,6 @@ from bilevel_optimisation.energy import Energy
 from bilevel_optimisation.measurement_model import MeasurementModel
 from bilevel_optimisation.optimise import optimise_nag, optimise_adam, optimise_nag_unrolling
 
-def add_group_options(param_groups: List[Dict[str, Any]], group_options: Dict[str, List[Any]]) -> None:
-    for key, values in group_options.items():
-        param_groups[0][key] = values
-
 def make_prox_map(prox_operator: torch.nn.Module, u: torch.Tensor) -> Callable:
     def prox_map(x: torch.Tensor, tau: float) -> torch.Tensor:
         return prox_operator(x, tau, u)
@@ -22,44 +18,35 @@ def add_prox(prox_operator: Optional[torch.nn.Module], param_groups: List[Dict[s
         for p in group['params']:
             setattr(p, 'prox', prox_map)
 
-def assemble_param_groups_nag(u: torch.Tensor, alpha: List[Optional[float]]=None,
-                              beta: List[Optional[float]]=None, lip_const: List[float]=None,
+def assemble_param_groups_nag(u: torch.Tensor, alpha: Optional[float]=None,
+                              beta: Optional[float]=None, lip_const: Optional[float]=None,
                               batch_optimisation: bool=True, **unknown_options) -> List[Dict[str, Any]]:
     u_ = u.detach().clone()
-    param_groups = [{'params': [torch.nn.Parameter(u_, requires_grad=True)]}]
+    group = {'params': [torch.nn.Parameter(u_, requires_grad=True)]}
 
     num_optimisation_variables = 1 if batch_optimisation else u.shape[0]
+    group['alpha'] = [alpha] * num_optimisation_variables if alpha is not None else [None] * num_optimisation_variables
+    group['beta'] = [beta] * num_optimisation_variables if beta is not None else [None] * num_optimisation_variables
+    group['lip_const'] = [lip_const] * num_optimisation_variables if lip_const is not None \
+        else [None] * num_optimisation_variables
 
-    alpha = [None for _ in range(0, num_optimisation_variables)] if not alpha else alpha
-    beta = [None for _ in range(0, num_optimisation_variables)] if not beta else beta
-    lip_const = [None for _ in range(0, num_optimisation_variables)] if not lip_const else lip_const
+    return [group]
 
-    add_group_options(param_groups, {'alpha': alpha, 'beta': beta, 'lip_const': lip_const})
-    return param_groups
-
-def assemble_param_groups_adam(u: torch.Tensor, lr: List[Optional[float]]=None,
-                               betas: List[Optional[Tuple[float, float]]]=None,
-                               weight_decay: List[Optional[float]]=None,
+def assemble_param_groups_adam(u: torch.Tensor, lr: Optional[float]=None,
+                               betas: Optional[Tuple[float, float]]=None,
+                               weight_decay: Optional[float]=None,
                                batch_optimisation: bool=True, **unknown_options) -> List[Dict[str, Any]]:
     u_ = u.detach().clone()
     param_groups = []
     if batch_optimisation:
-        group = {'params': [torch.nn.Parameter(u_, requires_grad=True)]}
+        group = {'params': [torch.nn.Parameter(u_, requires_grad=True)],
+                 'lr': lr, 'betas': betas, 'weight_decay': weight_decay}
         param_groups.append(group)
     else:
         for i in range(0, u_.shape[0]):
-            group = {'params': [torch.nn.Parameter(u_[i: i + 1, :, :, :].detach().clone(), requires_grad=True)]}
+            group = {'params': [torch.nn.Parameter(u_[i: i + 1, :, :, :].detach().clone(), requires_grad=True)],
+                     'lr': lr, 'betas': betas, 'weight_decay': weight_decay}
             param_groups.append(group)
-
-    lr = [None for _ in range(0, len(param_groups))] if not lr else lr
-    betas = [(None, None) for _ in range(0, len(param_groups))] if not betas else betas
-    weight_decay = [None for _ in range(0, len(param_groups))] if not weight_decay else weight_decay
-
-    for group, lr_, betas_, weight_decay_ in zip(param_groups, lr, betas, weight_decay):
-        group['lr'] = lr_
-        group['betas'] = betas_
-        group['weight_decay'] = weight_decay_
-
     return param_groups
 
 def parse_result(result: OptimiserResult, max_num_iterations: int, **unknown_options) -> LowerProblemResult:
@@ -132,7 +119,6 @@ def build_gradient_func(func: Callable, batch_optim: bool, unrolling: bool=False
 
 def solve_lower(energy: Energy, method: str, options: Dict[str, Any]) -> LowerProblemResult:
     """
-
     :param energy: Instance of class Energy which represents the lower problem.
     :param method: String indicating which of the provided optimisation methods is used to solve the lower problem.
         The following methods are implemented:
@@ -154,25 +140,23 @@ def solve_lower(energy: Energy, method: str, options: Dict[str, Any]) -> LowerPr
             single momentum parameter are required. Per-sample-optimisation performs for each sample of the batch an
             independent gradient step. Consequently, each sample requires step size or Lipschitz constant, and a
             momentum parameter.
-          alpha: List[float], optional
-            List of (constant) step sizes used in the optimisation scheme. If not specified, backtracking line search
-            to obtain sufficient descent along the direction of the negative gradient is applied. If specified, a
-            single step size must be provided when batch_optimisation is set to True; otherwise one step size per
-            sample must be provided.
-          beta: List[float], optional
-            List of (constant) momentum parameters. If not specified, the momentum parameter (for the full batch
-            and for each sample respectively) is computed on iteration level k as follows
+          alpha: float, optional
+            Constant step size used in the optimisation scheme. If not specified, backtracking line search
+            to obtain sufficient descent along the direction of the negative gradient is applied.
+            If alpha is specified and batch_optimisation is set to False, the specified alpha is used for each sample.
+          beta: float, optional
+            Constant momentum parameter. If not specified, the momentum parameter (for the full batch
+            and for each sample respectively) is computed at iteration level k as follows
 
                 theta_{k + 1} = 0.5 * (1 + math.sqrt(1 + 4 * (theta_{k} ** 2)))
                 beta_k = (theta_{k} - 1) / theta_{k + 1}
 
-            Similarly as for alpha, if beta is specified, it must be a list of a single element if batch_optimisation is
-            set to True; otherwise for each sample of the batch a momentum parameter needs to be provided.
-          lip_const: List[float], optional
-            List of initial Lipschitz constants used within the backtracking line search. A list of a single
-            element needs to be provided if batch_optimisation == True; a Lipschitz constant per sample must be
-            provided otherwise.
-            If lip_const and alpha are not specified, the defualt value 1e5 for the full batch optimisation or
+            If beta is specified, and batch_optimisation == False, the specified value is used for all the samples
+            in the optimisation scheme.
+          lip_const: float, optional
+            Initial Lipschitz constant used within the backtracking line search. The specified value is used in case
+            of batch-optimisation as well as in case of per-sample optimisation.
+            If lip_const and alpha are not specified, the default value 1e5 for the full batch optimisation or
             per sample optimisation is used.
         - method == 'napg'
           ---------------
@@ -182,11 +166,11 @@ def solve_lower(energy: Energy, method: str, options: Dict[str, Any]) -> LowerPr
             As for 'nag'
           batch_optimisation: bool, optional
             As for 'nag'
-          alpha: List[float], optional
+          alpha: float, optional
             As for 'nag'
-          beta: List[float], optional
+          beta: float, optional
             As for 'nag'
-          lip_const: List[float], optional
+          lip_const: float, optional
             As for 'nag'
           prox: torch.nn.Module
             A PyTorch module which represents the proximal operator. Its forward function must take the arguments
@@ -202,17 +186,16 @@ def solve_lower(energy: Energy, method: str, options: Dict[str, Any]) -> LowerPr
             individually within the optimisation process. If set to True, for each sample separate hyperparameters (lr,
             betas, weight_decay) are used. Note that per-sample optimisation is organised in this context by means
             of different parameter groups, which in PyTorch are processed sequentially.
-          lr: List[float], optional
-            List of learning rates. If batch_optimisation is set to True, a list of a single value must be provided;
-            otherwise the list must contain a learning rate per sample of the batch. Per default, 1e-4 is used if
+          lr: float, optional
+            Learning rate, which is used for the single parameter group in batch-optimisation and for all the
+            parameter groups in case of per-sample optimisation. Per default, 1e-4 is used if
             no specifications were made.
-          betas: List[Tuple[float, float]], optional
-            List of parameters used to compute moving average of first and second moments of gradients. If
-            batch_optimisation is set to True, a list of a single tuple of floats must be specified - in the other
-            case for each sample a tuple of floats must be specified. Per default the tuple (0.9, 0.999) is used.
-          weight_decay: List[float], optional
-            List of weights for L^2 penalisation. As for lr, betas a list of a single value or a list of values for
-            each sample must be provided. Per default the value 0.0 is used.
+          betas: Tuple[float, float], optional
+            Parameter tuple used to compute moving average of first and second moments of gradients. The same handling
+            as for lr is applied. Per default the tuple (0.9, 0.999) is used.
+          weight_decay: float, optional
+            Weights for L^2 penalisation. Again, the same handling as for 'lr' is applied. Per default the
+            value 0.0 is used.
     :return: Instance of class LowerProblemResult containing the solution tensor, the number of performed iterations,
         the final loss, and a message indicating why iteration terminated.
     """
@@ -250,17 +233,21 @@ def solve_lower(energy: Energy, method: str, options: Dict[str, Any]) -> LowerPr
     elif method == 'nag_unrolling':
         func = build_objective_func(energy, batch_optim=batch_optim, use_prox=False)
         grad_func = build_gradient_func(func, batch_optim, unrolling=True)
-        param_groups = assemble_param_groups_nag(u_, **options)
+
+        u = energy.measurement_model.get_noisy_observation().detach().clone()
+        param_groups = assemble_param_groups_nag(u.requires_grad_(True), **options)
 
         nag_result = optimise_nag_unrolling(func, grad_func, param_groups, **options)
         lower_prob_result = parse_result(nag_result, **options)
     elif method == 'napg_unrolling':
-        func = build_objective_func(energy, batch_optim=batch_optim, use_prox=True)
+        func = build_objective_func(energy, batch_optim=batch_optim, use_prox=False)
         grad_func = build_gradient_func(func, batch_optim, unrolling=True)
-        param_groups = assemble_param_groups_nag(u_, **options)
+
+        u = energy.measurement_model.get_noisy_observation().detach().clone()
+        param_groups = assemble_param_groups_nag(u.requires_grad_(True), **options)
 
         prox_operator = options.get('prox', None)
-        add_prox(prox_operator, param_groups, u_, energy, batch_optim)
+        add_prox(prox_operator, param_groups, u)
 
         nag_result = optimise_nag_unrolling(func, grad_func, param_groups, **options)
         lower_prob_result = parse_result(nag_result, **options)

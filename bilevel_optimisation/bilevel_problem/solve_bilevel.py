@@ -9,15 +9,14 @@ from bilevel_optimisation.bilevel_problem.gradients import ImplicitAutogradFunct
 from bilevel_optimisation.callbacks import Callback
 from bilevel_optimisation.energy.Energy import Energy
 from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
-from bilevel_optimisation.lower_problem import add_group_options
 from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementModel
-from bilevel_optimisation.optimise import step_adam, create_projected_optimiser, step_nag_lower
+from bilevel_optimisation.optimise import step_adam, create_projected_optimiser, step_nag
 from bilevel_optimisation.optimise.optimise_adam import harmonise_param_groups_adam
+from bilevel_optimisation.optimise.optimise_lbfgs import harmonise_param_groups_lbfgs
 from bilevel_optimisation.optimise.optimise_nag import harmonise_param_groups_nag
 from bilevel_optimisation.solver.CGSolver import CGSolver
 from bilevel_optimisation.utils.dataset_utils import collate_function
 from bilevel_optimisation.utils.file_system_utils import dump_config_file, create_experiment_dir
-
 
 def assemble_param_groups_base(regulariser: FieldsOfExperts, alternating: bool=False):
     param_dict = {}
@@ -48,7 +47,12 @@ def assemble_param_groups_adam(regulariser: FieldsOfExperts, lr: Optional[List[f
     betas = [None for _ in range(0, len(param_groups))] if not betas else betas
     eps = [None for _ in range(0, len(param_groups))] if not eps else eps
     weight_decay = [None for _ in range(0, len(param_groups))] if not weight_decay else weight_decay
-    add_group_options(param_groups, {'lr': lr, 'betas': betas, 'eps': eps, 'weight_decay': weight_decay})
+
+    for idx, group in enumerate(param_groups):
+        group['lr'] = lr[idx]
+        group['betas'] = betas[idx]
+        group['eps'] = eps[idx]
+        group['weight_decay'] = weight_decay[idx]
 
     return param_groups
 
@@ -61,34 +65,35 @@ def assemble_param_groups_nag(regulariser: FieldsOfExperts, alpha: Optional[List
     alpha = [None for _ in range(0, len(param_groups))] if not alpha else alpha
     beta = [None for _ in range(0, len(param_groups))] if not beta else beta
     lip_const = [None for _ in range(0, len(param_groups))] if not lip_const else lip_const
-    add_group_options(param_groups, {'alpha': alpha, 'beta': beta, 'lip_const': lip_const})
+
+    for idx, group in enumerate(param_groups):
+        group['alpha'] = [alpha[idx]]
+        group['beta'] = [beta[idx]]
+        group['lip_const'] = [lip_const[idx]]
 
     return param_groups
 
 def assemble_param_groups_lbfgs(regulariser: FieldsOfExperts, lr: Optional[List[float]]=None,
-                                max_iter: Optional[List[int]]=None,
-                                max_eval: Optional[List[int]]=None, tolerance_grad: Optional[List[float]]=None,
-                                tolerance_change: Optional[List[float]]=None, history_size: Optional[List[int]]=None,
-                                line_search_fn: Optional[List[str]]=None, **unknown_options) -> List[Dict[str, Any]]:
+                                max_iter: Optional[int]=None,
+                                max_eval: Optional[int]=None, tolerance_grad: Optional[float]=None,
+                                tolerance_change: Optional[float]=None, history_size: Optional[int]=None,
+                                line_search_fn: Optional[str]=None, **unknown_options) -> List[Dict[str, Any]]:
     # NOTE
     #   > According to
     #           https://docs.pytorch.org/docs/stable/generated/torch.optim.LBFGS.html,
     #       the PyTorch implementation currently supports only a single parameter group.
 
     param_groups = assemble_param_groups_base(regulariser, False)
-    lr = [None for _ in range(0, len(param_groups))] if not lr else lr
-    max_iter = [None for _ in range(0, len(param_groups))] if not max_iter else max_iter
-    max_eval = [None for _ in range(0, len(param_groups))] if not max_eval else max_eval
-    tolerance_grad = [None for _ in range(0, len(param_groups))] if not tolerance_grad else tolerance_grad
-    tolerance_change = [None for _ in range(0, len(param_groups))] if not tolerance_change else tolerance_change
-    history_size = [None for _ in range(0, len(param_groups))] if not history_size else history_size
-    line_search_fn = [None for _ in range(0, len(param_groups))] if not line_search_fn else line_search_fn
+    for group in param_groups:
+        group['lr'] = None if not lr else lr
+        group['max_iter'] = None if not max_iter else max_iter
+        group['max_eval'] = None if not max_eval else max_eval
+        group['tolerance_grad'] = None if not tolerance_grad else tolerance_grad
+        group['tolerance_change'] = None if not tolerance_change else tolerance_change
+        group['history_size'] = None if not history_size else history_size
+        group['line_search_fn'] = None if not line_search_fn else line_search_fn
 
-    add_group_options(param_groups, {'lr': lr, 'max_iter': max_iter, 'max_eval': max_eval,
-                                     'tolerance_grad': tolerance_grad, 'tolerance_chance': tolerance_change,
-                                     'history_size': history_size, 'line_search_fn': line_search_fn})
     return param_groups
-
 
 class BilevelOptimisation:
     """
@@ -106,9 +111,17 @@ class BilevelOptimisation:
         :param method_lower: String indicating the solution method for the lower level problem.
         :param options_lower: Dictionary of options for the solution of the lower level problem
         :param config: Configuration object for the setup of measurement model and energy
-        :param differentiation_method: String indicating which differentiation method is used, implicit differentiation
-            or unrolling. If implicit differentiation is used, a linear system solver must be chosen. The default
-            option is implicit differentiation.
+        :param differentiation_method: String indicating which differentiation method is used:
+            > 'implicit': Computation of derivative of upper level objective function using the implicit
+                function theorem. This approach requires to solve a linear system of equations - hence a linear
+                system solver must be specified if choosing this option.
+            > 'hessian_free': Derivative of upper level objective function is computed by approximating
+                the system matrix (involving the hessian of the energy function) of the implicit differentiation
+                scheme using the identity matrix.
+            > 'unrolling': This scheme is about performing a small number of gradient steps to solve the lower level
+                problem while not breaking the corresponding computational graph. Derivatives of the resulting
+                approximate solution of the lower level problem are then computed by means of autograd.
+            Per default, implicit differentiation is applied.
         :param solver: String indicating the linear system solver which is used to compute gradients when implicit
             differentiation is applied. The default option is 'cg'.
         :param options_solver: Dictionary of options for the linear system solver. The cg solver takes the
@@ -150,9 +163,9 @@ class BilevelOptimisation:
             def func(*params: torch.nn.Parameter) -> torch.Tensor:
                 upper_loss_func = lambda z: upper_loss(u_clean, z)
                 return ImplicitAutogradFunction.apply(energy, self.method_lower, self.options_lower,
-                                                          upper_loss_func, self.solver,
-                                                          *params)
-
+                                                      upper_loss_func, self.solver,
+                                                      self.backward_mode == 'hessian_free',
+                                                      *params)
         return func
 
     def learn(self, regulariser: FieldsOfExperts, lam: float, upper_loss_func: Callable, dataset_train,
@@ -207,7 +220,7 @@ class BilevelOptimisation:
                    with torch.enable_grad():
                        loss_ = func(*params)
                    return list(torch.autograd.grad(outputs=loss_, inputs=params))
-               loss = step_nag_lower(func, grad_func, param_groups_)
+               loss = step_nag(func, grad_func, param_groups_)
 
                for cb in callbacks:
                    cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)
@@ -233,13 +246,13 @@ class BilevelOptimisation:
 
         optimiser = create_projected_optimiser(torch.optim.Adam)(param_groups_)
 
-        # TODO
-        #   > make me configurable ...
+        # # TODO
+        # #   > make me configurable ...
         max_num_iterations = optimisation_options_upper['max_num_iterations']
-        num_iterations_1 = min(5000, max_num_iterations)
-        scheduler_1 = torch.optim.lr_scheduler.ConstantLR(optimiser, factor=1.0, total_iters=num_iterations_1)
-        scheduler_2 = torch.optim.lr_scheduler.CosineAnnealingLR(optimiser, T_max=max_num_iterations - num_iterations_1)
-        scheduler = torch.optim.lr_scheduler.ChainedScheduler([scheduler_1, scheduler_2], optimizer=optimiser)
+        # num_iterations_1 = min(5000, max_num_iterations)
+        # scheduler_1 = torch.optim.lr_scheduler.ConstantLR(optimiser, factor=1.0, total_iters=num_iterations_1)
+        # scheduler_2 = torch.optim.lr_scheduler.CosineAnnealingLR(optimiser, T_max=max_num_iterations - num_iterations_1)
+        # scheduler = torch.optim.lr_scheduler.ChainedScheduler([scheduler_1, scheduler_2], optimizer=optimiser)
 
         for cb in callbacks:
             cb.on_train_begin(regulariser, device=device, dtype=dtype)
@@ -249,14 +262,14 @@ class BilevelOptimisation:
                 with torch.no_grad():
                     batch_ = batch.to(dtype=dtype, device=device)
 
-                    measurement_model = MeasurementModel(batch_, self.config)
+                    measurement_model = MeasurementModel(batch_, config=self.config)
                     energy = Energy(measurement_model, regulariser, lam)
                     energy = energy.to(device=device, dtype=dtype)
 
                     func = self._loss_func_factory(upper_loss, energy, batch_)
                     loss = step_adam(optimiser, func, param_groups_)
 
-                    scheduler.step()
+                    # scheduler.step()
 
                     for cb in callbacks:
                         cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)
@@ -278,6 +291,7 @@ class BilevelOptimisation:
             callbacks = []
 
         param_groups_ = assemble_param_groups_lbfgs(regulariser, **optimisation_options_upper)
+        param_groups_ = harmonise_param_groups_lbfgs(param_groups_)
         optimiser = create_projected_optimiser(torch.optim.LBFGS)(param_groups_)
 
         max_num_iterations = optimisation_options_upper['max_num_iterations']
@@ -289,7 +303,7 @@ class BilevelOptimisation:
                 with torch.no_grad():
                     batch_ = batch.to(dtype=dtype, device=device)
 
-                    measurement_model = MeasurementModel(batch_, self.config)
+                    measurement_model = MeasurementModel(batch_, config=self.config)
                     energy = Energy(measurement_model, regulariser, lam)
                     energy = energy.to(device=device, dtype=dtype)
 

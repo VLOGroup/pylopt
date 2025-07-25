@@ -1,5 +1,5 @@
 import torch
-from typing import List, Dict, Any, Callable, Optional
+from typing import List, Dict, Any, Callable, Optional, Tuple
 import math
 
 from bilevel_optimisation.data import OptimiserResult
@@ -24,8 +24,6 @@ def harmonise_param_groups_nag(param_groups: List[Dict[str, Any]], break_graph: 
         else:
             group_['params'] = [p for p in group['params']]
 
-
-
         group_['alpha'] = group['alpha']
         group_['beta'] = group['beta']
         if all(item is not None for item in group_['beta']):
@@ -48,92 +46,8 @@ def harmonise_param_groups_nag(param_groups: List[Dict[str, Any]], break_graph: 
         param_groups_merged.append(group_)
     return param_groups_merged
 
-# def make_intermediate_step(param_group: Dict[str, Any], in_place: bool) -> None:
-#     beta = compute_momentum_parameter(param_group)
-#     if in_place:
-#         for p, p_old in zip([p_ for p_ in param_group['params']], [p_ for p_ in param_group['history']]):
-#             momentum = p.data - p_old.data
-#             p_old.data.copy_(p.data)
-#             p.data.add_(beta * momentum)
-#     else:
-#         params_new = []
-#         history_new = []
-#         for p, p_old in zip([p_ for p_ in param_group['params']], [p_ for p_ in param_group['history']]):
-#             history_new.append(p.detach().clone())
-#
-#             momentum = p - p_old
-#             params_new.append(p + beta * momentum)
-#         param_group['params'] = params_new
-#         param_group['history'] = history_new
-#
-# def make_gradient_step(param_group: Dict[str, Any], param_group_grads: List[torch.Tensor],
-#                        step_size: float, in_place: bool) -> None:
-#     if in_place:
-#         for p, grad_p in zip(param_group['params'], param_group_grads):
-#             p.data.sub_(step_size * grad_p)
-#             if hasattr(p, 'prox'):
-#                 p.data.copy_(p.prox(p.data, step_size))
-#             if hasattr(p, 'zero_mean_projection'):
-#                 p.data.copy_(p.proj(p.data))
-#     else:
-#         params_new = []
-#         for p, grad_p in zip(param_group['params'], param_group_grads):
-#             p = p - step_size * grad_p
-#             if hasattr(p, 'prox'):
-#                 p = p.prox(p, step_size)
-#             if hasattr(p, 'zero_mean_projection'):
-#                 p = p.proj(p)
-#             params_new.append(p)
-#         param_group['params'] = params_new
-
 def flatten_groups(param_groups: List[Dict[str, Any]]) -> List[torch.Tensor]:
     return [p for group in param_groups for p in group['params']]
-
-# def compute_quadratic_approximation(param_group_new: Dict[str, Any],
-#                                     param_group: List[torch.Tensor],
-#                                     grad_group_list: List[torch.Tensor], loss: torch.Tensor,
-#                                     lip_const: float) -> torch.Tensor:
-#     """
-#     Function which computes the quadratic approximation of the loss function of the optimisation
-#     function. It is used when searching via backtracking for a step size which guarantees
-#     sufficient descent.
-#
-#     :param param_group_new: List of new parameter candidates of current group
-#     :param param_group: List of current parameters of current group
-#     :param grad_group_list: List of gradient of current parameters of current group
-#     :param loss: Value of loss function at current parameters
-#     :param lip_const: Current guess of the gradients Lipschitz constant
-#     :return: Quadratic approximation of loss.
-#     """
-#     quadr_approx = loss.detach().clone()
-#     for p_new, p, grad_p in zip(param_group_new['params'], param_group, grad_group_list):
-#         quadr_approx += (torch.sum(grad_p * (p_new.data - p.data)) +
-#                          0.5 * lip_const * torch.sum((p_new.data - p.data) ** 2))
-#     return quadr_approx
-#
-# def apply_backtracking(func: Callable, param_groups: List[Dict[str, Any]], group_idx: int,
-#                        group_grads: List[torch.Tensor], in_place: bool) -> None:
-#     params_orig = [[p.data.detach().clone() for p in group['params']] for group in param_groups]
-#     loss = func(*flatten_groups(param_groups))
-#
-#     for k in range(0, param_groups[group_idx]['max_num_backtracking_iterations']):
-#         lip_const = param_groups[group_idx]['lip_const']
-#         step_size = 1 / lip_const
-#         make_gradient_step(param_groups[group_idx], group_grads, step_size, in_place)
-#
-#         params_flat_ = flatten_groups(param_groups)
-#         loss_new = func(*params_flat_)
-#
-#         quadratic_approx = compute_quadratic_approximation(param_groups[group_idx], params_orig[group_idx],
-#                                                            group_grads, loss, lip_const)
-#
-#         if loss_new <= quadratic_approx * 1.01:
-#             param_groups[group_idx]['lip_const'] *= 0.9
-#             break
-#         else:
-#             param_groups[group_idx]['lip_const'] *= 2.0
-#             for p, p_orig in zip(param_groups[group_idx]['params'], params_orig[group_idx]):
-#                 p.copy_(p_orig.clone())
 
 def compute_relative_error(param_groups: List[Dict[str, Any]]) -> torch.Tensor:
     error = 0.0
@@ -145,34 +59,15 @@ def compute_relative_error(param_groups: List[Dict[str, Any]]) -> torch.Tensor:
                                / torch.sqrt(torch.sum(p_old ** 2, dim=(-2, -1)) + EPSILON))
     return error / n
 
+def make_intermediate_step(group: Dict[str, Any], in_place: bool=True) -> Dict[str, Any]:
+    """
+    Function which computes the intermediate step of the Nesterov scheme.
 
-
-def step_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]],
-             alternating: bool=False, in_place: bool=True) -> torch.Tensor:
-    pass
-#     params_flat = flatten_groups(param_groups)
-#     params_flat_ = [p.requires_grad_(True) for p in params_flat]
-#     loss = func(*params_flat_)
-#     if not alternating:
-#         grads = grad_func(*params_flat_)
-#
-#     grad_idx = 0
-#     for group_idx, group in enumerate(param_groups):
-#         if alternating:
-#             grads = grad_func(*params_flat)
-#
-#         make_intermediate_step(group, in_place)
-#         group_grads = grads[grad_idx: grad_idx + len(group['params'])]
-#
-#         if group['alpha']:
-#             make_gradient_step(group, group_grads, group['alpha'], in_place)
-#         else:
-#             apply_backtracking(func, param_groups, group_idx, group_grads, in_place)
-#         grad_idx += len(group['params'])
-#
-#     return loss
-
-def make_intermediate_step(group):
+    :param group: Parameter group to be updated
+    :param in_place: Flag indicating if update shall be updated in place. For the unrolling scheme in place
+        updates cannot be used, since computational graph would break.
+    :return: Group of updated parameters.
+    """
     param = group.get('params')[0]
     param_old = group.get('history')[0]
 
@@ -186,26 +81,70 @@ def make_intermediate_step(group):
 
     # make intermediate step
     momentum = beta.reshape(-1, *[1] * (param.dim() - 1)) * (param - param_old)
-    param_old.copy_(param.data)
-    param.add_(momentum)
+    if in_place:
+        param_old.copy_(param.data)
+        param.add_(momentum)
+        return group
+    else:
+        param_old = param.detach().clone()
+        param_new = param + momentum
+        group_new = {**group, 'params': [param_new], 'history': [param_old]}
+        return group_new
 
-def make_gradient_step(param: torch.nn.Parameter, grads: torch.Tensor, alpha: torch.Tensor):
+def make_gradient_step(param: torch.nn.Parameter, grads: torch.Tensor, alpha: torch.Tensor,
+                       in_place: bool=True) -> torch.Tensor:
+    """
+    Function which performs a gradient step on param.
+
+    NOTE
+    ----
+    > In case no in place update is made, projections will not be applied. This is because the non in-place update
+        is required only for the unrolling scheme of the lower level problem, where no projections are needed.
+
+    :param param: PyTorch parameter to be updated.
+    :param grads: Gradient of objective function w.r.t. param
+    :param alpha: Step size
+    :param in_place: Flag indicating if update is performed in place. For updates within the unrolling scheme,
+        updates can't be made in place.
+    :return:
+    """
     alpha_ = alpha.reshape(-1, *[1] * (param.dim() - 1))
-    param.sub_(alpha_ * grads)
-    if hasattr(param, 'prox'):
-        param.data.copy_(param.prox(param.data, alpha_))
-    if hasattr(param, 'zero_mean_projection'):
-        param.data.copy_(param.zero_mean_projection(param))
-    if hasattr(param, 'orthogonal_projection'):
-        param.data.copy_(param.orthogonal_projection(param))
+    if in_place:
+        param.sub_(alpha_ * grads)
+        if hasattr(param, 'prox'):
+            param.data.copy_(param.prox(param.data, alpha_))
+        if hasattr(param, 'zero_mean_projection'):
+            param.data.copy_(param.zero_mean_projection(param))
+        if hasattr(param, 'orthogonal_projection'):
+            param.data.copy_(param.orthogonal_projection(param))
+    else:
+        param = param - alpha_ * grads
+        if hasattr(param, 'prox'):
+            param = param.prox(param.data, alpha_)
 
-def backtracking_line_search(param: torch.nn.Parameter, grads: torch.Tensor, closure,
-                             lip_const: torch.Tensor, rho_1: float, rho_2: float, max_num_iterations: int=10) -> torch.Tensor:
+    return param
+
+def backtracking_line_search(param: torch.nn.Parameter, grads: torch.Tensor, closure: Callable,
+                             lip_const: torch.Tensor, rho_1: float, rho_2: float,
+                             max_num_iterations: int=10) -> torch.Tensor:
+    """
+    Function which performs backtracking line search for the non-unrolling update to find a step size giving
+    sufficient descent.
+
+    :param param: Parameter to be updated.
+    :param grads: Gradient of objective function w.r.t. param
+    :param closure: Closure function, which evaluates the loss function at the given parameters.
+    :param lip_const: Current set of Lipschitz constants.
+    :param rho_1: Decrease factor for Lipschitz constant
+    :param rho_2: Increase factor for Lipschitz constant
+    :param max_num_iterations: Maximal number of backtracking iterations.
+    :return: Updated set of Lipschitz constants.
+    """
     param_orig = param.data.clone()
     loss = closure()
 
-    for k in range(0, max_num_iterations):
-        make_gradient_step(param, grads, 1 / lip_const)
+    for k in range(0, max(1, max_num_iterations)):
+        _ = make_gradient_step(param, grads, 1 / lip_const)
 
         loss_new = closure()
         quadr_approx = (loss + torch.sum(grads * (param - param_orig))
@@ -218,24 +157,43 @@ def backtracking_line_search(param: torch.nn.Parameter, grads: torch.Tensor, clo
         else:
             lip_const = torch.where(sufficient_descent_met, lip_const, lip_const * rho_2)
 
-    make_gradient_step(param, grads, 1 / lip_const)
+    _ = make_gradient_step(param, grads, 1 / lip_const)
     return torch.where(sufficient_descent_met, lip_const * rho_1, lip_const)
 
-def step_nag_lower(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]],
+def step_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]],
                    rho_1: float=0.9, rho_2: float=2.0) -> torch.Tensor:
-    # TODO/NOTE
-    #   > main assumptions:
-    #       * multiple parameter groups are allowed, but each group
-    #           consists only of a single parameter tensor!
-    #       * implementation is alternating w.r.t. to param groups, i.e.
-    #           for each group: compute gradient, make update, ...
-    #       * regarding choice of parameters_
-    #           - batch optimisation: lists containing single element; otherwise default parameters will be used
-    #           - per sample optimisation: lists containing batch_size parameters; if not specified default values
-    #               will be used. it is not possible to provide partially non-default choices.
+    """
+    Function which performs a single NAG or NAPG step.
 
+    NOTE
+    ----
+    > Implementation assumes that parameters are given in terms of parameter groups, i.e. a list
+        of dictionaries, where each dictionary represents a parameter group. Every parameter group
+        must have the following key, value pairs:
+            - 'params': List of PyTorch parameters
+            - 'alpha': List of floats, or list of Nones indicating the line search strategy w.r.t. to
+                batch-optimisation or per-sample optimisation. If a list of floats is specified, these values are
+                used as constant step sizes; otherwise backtracking line search is applied.
+            - 'beta': List of floats, or list of Nones representing the momentum parameters per optimisation
+                variable (batch or samples). If it contains a None, Nesterov's momentum schedule
+                is applied for all optimisation variables.
+            - 'lip_const': List of floats, or list of Nones specifying the Lipschitz constants used in the
+                backtracking line search scheme. If one the provided value is None, the default value is used.
+        Projection operators, and the proximal operator are assumed to be given on parameter level in terms
+        of one of the attributes 'zero_mean_projection', 'orthogonal_projection', 'prox'.
+    > Optimisation procedure is alternating w.r.t. parameter groups. This means, that
+        for each group, sequentially, gradients are computed and applied.
+    > This implementation is feasible for solving the lower level and the upper level problem.
+
+    :param func: Function representing the objective function
+    :param grad_func: Function representing the gradient of func
+    :param param_groups: Groups of parameters to be optimised.
+    :param rho_1: Decrease factor for Lipschitz constant
+    :param rho_2: Increase factor for Lipschitz constant
+    :return: Loss at new iterate
+    """
     for idx, group in enumerate(param_groups):
-        make_intermediate_step(group)
+        _ = make_intermediate_step(group)
 
         params_flat = flatten_groups(param_groups)
         params_flat_ = [p.requires_grad_(True) for p in params_flat]
@@ -245,7 +203,7 @@ def step_nag_lower(func: Callable, grad_func: Callable, param_groups: List[Dict[
         if all(item is not None for item in group['alpha']):
             # use constant step size(s)
             alpha = torch.tensor(group['alpha'], dtype=param.dtype, device=param.device)
-            make_gradient_step(param, grads, alpha)
+            _ = make_gradient_step(param, grads, alpha)
         else:
             # apply backtracking line search
             def closure():
@@ -262,12 +220,24 @@ def step_nag_lower(func: Callable, grad_func: Callable, param_groups: List[Dict[
 def optimise_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]],
                  max_num_iterations: int=MAX_NUM_ITERATIONS_DEFAULT,
                  rel_tol: Optional[float]=None, **unknown_options) -> OptimiserResult:
+    """
+    Implementation of Nesterov's accelerated gradient method.
+
+    :param func: Callable representing the loss function
+    :param grad_func: Callable representing the gradient of func
+    :param param_groups: List of dictionaries, where each dictionary represents a parameter group. See step_nag_lower().
+    :param max_num_iterations: Maximal number of iterations to be performed.
+    :param rel_tol: Tolerance, which if provided, is used as early stopping criterion.
+    :param unknown_options:
+    :return: Instance of class OptimiserResult containing the computed the solution, the final loss, the
+        number of iterations which were performed and a status message.
+    """
     num_iterations = max_num_iterations
     param_groups_ = harmonise_param_groups_nag(param_groups, break_graph=True)
 
     loss = -1 * torch.ones(1)
     for k in range(0, max_num_iterations):
-        loss = step_nag_lower(func, grad_func, param_groups_)
+        loss = step_nag(func, grad_func, param_groups_)
 
         if rel_tol:
             rel_error = compute_relative_error(param_groups_)
@@ -280,34 +250,94 @@ def optimise_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[st
                              loss=loss)
     return result
 
+@torch.no_grad()
+def backtracking_line_search_unrolling(param_groups: List[Dict[str, Any]], group_idx: int, grads: torch.Tensor,
+                                       closure: Callable, rho_1: float=0.9, rho_2: float=2.0,
+                                       max_num_iterations: int=10) -> Tuple[torch.Tensor, torch.Tensor]:
+    group = param_groups[group_idx]
+    param = group.get('params')[0].clone()
+    param_orig = group['params'][0].clone()
+
+    loss = closure(param_groups)
+
+    lip_const = torch.tensor(group['lip_const'], dtype=param.dtype, device=param.device)
+    for k in range(0, max(1, max_num_iterations)):
+        param_new = make_gradient_step(param, grads, 1 / lip_const, in_place=False)
+
+        group_new = {**group, 'params': [param_new]}
+        param_groups[group_idx] = group_new
+        loss_new = closure(param_groups)
+
+        quadr_approx = (loss + torch.sum(grads * (param_new - param_orig))
+                        + 0.5 * lip_const * torch.sum((param_new - param_orig) ** 2))
+        sufficient_descent_met = loss_new <= quadr_approx
+
+        group_orig = {**group, 'params': [param_orig]}
+        param_groups[group_idx] = group_orig
+        if sufficient_descent_met.all():
+            break
+        else:
+            lip_const = torch.where(sufficient_descent_met, lip_const, lip_const * rho_2)
+
+    lip_const_new = torch.where(sufficient_descent_met, lip_const * rho_1, lip_const)
+
+    return lip_const, lip_const_new
+
 def optimise_nag_unrolling(func: Callable, grad_func: Callable, param_groups: List[Dict[str, Any]],
                            max_num_iterations: int=30, rel_tol: Optional[float]=None,
                            **unknown_options) -> OptimiserResult:
+    """
+    Implementation of the unrolling scheme for solving the lower problem using NAG or NAPG.
+
+    :param func: Callable representing the objective function
+    :param grad_func: Callable representing the gradient function of grad
+    :param param_groups: List of dictionaries, where each dictionary represents a parameter group. See step_nag_lower().
+    :param max_num_iterations: Maximal number of iterations to be performed. Per default only 30 iterations are
+        performed.
+    :param rel_tol: Tolerance, which if provided, is used for early stopping.
+    :param unknown_options:
+    :return: Instance of class OptimiserResult containing the computed the solution, the final loss, the
+        number of iterations which were performed and a status message.
+    """
     num_iterations = max_num_iterations
-    param_groups_ = harmonise_param_groups_nag(param_groups, break_graph=True)
+    param_groups_ = harmonise_param_groups_nag(param_groups, break_graph=False)
 
+    param_groups_current = param_groups_
     for k in range(0, max_num_iterations):
-        for group_idx, group in enumerate(param_groups_):
-            make_intermediate_step(param_groups_[group_idx], in_place=False)
+        param_groups_new = []
+        for idx, group in enumerate(param_groups_current):
+            param_groups_current[idx] = make_intermediate_step(group, in_place=False)
 
-        param_groups_flat = flatten_groups(param_groups_)
-        grads = grad_func(*param_groups_flat)
+            params_flat = flatten_groups(param_groups_current)
+            params_flat_ = [p.requires_grad_(True) for p in params_flat]
+            grads = grad_func(*params_flat_)[idx]
 
-        grad_idx = 0
-        for group_idx, group in enumerate(param_groups_):
-            group_grads = list(grads[grad_idx: grad_idx + len(group)])
-            if group['alpha']:
-                make_gradient_step(group, group_grads, group['alpha'], in_place=False)
+            param = group.get('params')[0]
+            if all(item is not None for item in group['alpha']):
+                alpha = torch.tensor(group['alpha'], dtype=param.dtype, device=param.device)
+                param_new = make_gradient_step(param, grads, alpha, in_place=False)
+                group_new = {**group, 'params': [param_new]}
             else:
-                apply_backtracking(func, param_groups_, group_idx, group_grads, in_place=False)
+                def closure(_param_groups: List[Dict[str, Any]]) -> torch.Tensor:
+                    return func(*flatten_groups(_param_groups))
 
-            grad_idx += len(group['params'])
+                lip_const, lip_const_new = backtracking_line_search_unrolling(param_groups_current, idx, grads,
+                                                                              closure,
+                                                                              max_num_iterations=
+                                                                              group['max_num_backtracking_iterations'])
+                param_new = make_gradient_step(param, grads, 1 / lip_const, in_place=False)
+                group_new = {**group, 'params': [param_new], 'lip_const': lip_const_new.tolist()}
+
+            param_groups_new.append(group_new)
+        param_groups_current = param_groups_new
 
         if rel_tol:
-            rel_error = compute_relative_error(param_groups_)
+            rel_error = compute_relative_error(param_groups_current)
+
             if rel_error <= rel_tol:
                 num_iterations = k + 1
                 break
 
-    return OptimiserResult(solution=param_groups_, num_iterations=num_iterations,
-                             loss=func(*flatten_groups(param_groups_)))
+    return OptimiserResult(solution=param_groups_current, num_iterations=num_iterations,
+                             loss=func(*flatten_groups(param_groups_current)))
+
