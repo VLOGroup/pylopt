@@ -10,7 +10,7 @@ class StudentT(Potential):
     Class implementing student-t potential for the usage in context of FoE models.
     """
 
-    def __init__(self, num_marginals: int, config: Configuration):
+    def __init__(self, num_marginals: int, config: Configuration) -> None:
         super().__init__(num_marginals)
 
         initialisation_mode = config['potential']['student_t']['initialisation']['mode'].get()

@@ -171,7 +171,7 @@ class BilevelOptimisation:
     def learn(self, regulariser: FieldsOfExperts, lam: float, upper_loss_func: Callable, dataset_train,
               optimisation_method_upper: str, optimisation_options_upper: Dict[str, Any],
               batch_size: int=32, crop_size: int=64, dtype: torch.dtype=torch.float32,
-              device: Optional[torch.device]=None, callbacks=None):
+              device: Optional[torch.device]=None, callbacks=None) -> None:
 
         device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         train_loader = DataLoader(dataset_train, batch_size=batch_size,
@@ -194,7 +194,7 @@ class BilevelOptimisation:
     @torch.no_grad()
     def _learn_nag(self, regulariser: FieldsOfExperts, lam: float, upper_loss: Callable,
                    optimisation_options_upper: Dict[str, Any], train_loader: torch.utils.data.DataLoader,
-                   dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None):
+                   dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None) -> None:
        if callbacks is None:
            callbacks = []
        regulariser = regulariser.to(device=device, dtype=dtype)
@@ -237,7 +237,7 @@ class BilevelOptimisation:
 
     def _learn_adam(self, regulariser: FieldsOfExperts, lam: float, upper_loss: Callable,
                     optimisation_options_upper: Dict[str, Any], train_loader: torch.utils.data.DataLoader,
-                    dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None):
+                    dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None) -> None:
         if callbacks is None:
             callbacks = []
 
@@ -286,7 +286,7 @@ class BilevelOptimisation:
 
     def _learn_lbfgs(self, regulariser: FieldsOfExperts, lam: float, upper_loss: Callable,
                     optimisation_options_upper: Dict[str, Any], train_loader: torch.utils.data.DataLoader,
-                    dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None):
+                    dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None) -> None:
         if callbacks is None:
             callbacks = []
 

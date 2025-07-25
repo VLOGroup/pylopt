@@ -106,7 +106,7 @@ class ImageFilter(torch.nn.Module):
     def get_num_filters(self) -> int:
         return self.filter_tensor.shape[0]
 
-    def forward(self, x: torch.Tensor):
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
         x_padded = torch.nn.functional.pad(x, (self.padding, ) * 4, self.padding_mode)
         return torch.nn.functional.conv2d(x_padded, self.filter_tensor)
 

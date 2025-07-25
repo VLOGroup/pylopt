@@ -36,17 +36,17 @@ def compute_moving_average(data: np.ndarray, window: int) -> np.ndarray:
 
 class Callback(ABC):
 
-    def __init__(self):
+    def __init__(self) -> None:
         pass
 
     def on_step(self, step: int, regulariser: Optional[FieldsOfExperts]=None,
                 loss: Optional[torch.Tensor]=None, **kwargs) -> None:
         pass
 
-    def on_train_begin(self, regulariser: Optional[FieldsOfExperts]=None, **kwargs):
+    def on_train_begin(self, regulariser: Optional[FieldsOfExperts]=None, **kwargs) -> None:
         pass
 
-    def on_train_end(self):
+    def on_train_end(self) -> None:
         pass
 
 class SaveModel(Callback):
@@ -57,7 +57,7 @@ class SaveModel(Callback):
         self.save_freq = save_freq
 
     def on_step(self, step: int, regulariser: Optional[FieldsOfExperts]=None,
-                loss: Optional[torch.Tensor]=None, **kwargs):
+                loss: Optional[torch.Tensor]=None, **kwargs) -> None:
         if step % self.save_freq and regulariser is not None:
             if not os.path.exists(self.path_to_model_dir):
                 os.makedirs(self.path_to_model_dir, exist_ok=True)
@@ -65,7 +65,7 @@ class SaveModel(Callback):
             regulariser.get_potential().save(self.path_to_model_dir, 'potential_iter_{:d}.pt'.format(step))
 
 class PlotFiltersAndPotentials(Callback):
-    def __init__(self, path_to_data_dir: str, plotting_freq: int = 2, tb_writer: Optional[SummaryWriter]=None):
+    def __init__(self, path_to_data_dir: str, plotting_freq: int = 2, tb_writer: Optional[SummaryWriter]=None) -> None:
         super().__init__()
 
         self.path_to_filter_plot_dir = os.path.join(path_to_data_dir, 'filters')
@@ -80,7 +80,7 @@ class PlotFiltersAndPotentials(Callback):
         self.plotting_freq = plotting_freq
 
     def on_step(self, step: int, regulariser: Optional[FieldsOfExperts]=None,
-                loss: Optional[torch.Tensor]=None, **kwargs):
+                loss: Optional[torch.Tensor]=None, **kwargs) -> None:
         device = kwargs.get('device', None)
         dtype = kwargs.get('dtype', None)
 
@@ -94,7 +94,7 @@ class PlotFiltersAndPotentials(Callback):
         filter_tensor = filter_tensor / torch.max(filter_tensor)
         return filter_tensor
 
-    def _plot_filters(self, step: int, regulariser: FieldsOfExperts):
+    def _plot_filters(self, step: int, regulariser: FieldsOfExperts) -> None:
         filters = regulariser.get_image_filter().get_filter_tensor()
         filter_norms = [torch.linalg.norm(fltr).detach().cpu().item() for fltr in filters]
 
@@ -126,7 +126,7 @@ class PlotFiltersAndPotentials(Callback):
         plt.close(fig)
 
     def _plot_potentials(self, step: int, regulariser: FieldsOfExperts, device: Optional[torch.device],
-                         dtype: Optional[torch.dtype]):
+                         dtype: Optional[torch.dtype]) -> None:
         if device is not None and dtype is not None:
             filters = regulariser.get_image_filter().get_filter_tensor()
             filter_norms = [torch.linalg.norm(fltr).detach().cpu().item() for fltr in filters]
@@ -196,7 +196,7 @@ class TrainingMonitor(Callback):
 
         self.lip_const_dict = {}
 
-    def on_train_begin(self, regulariser: Optional[FieldsOfExperts]=None, **kwargs):
+    def on_train_begin(self, regulariser: Optional[FieldsOfExperts]=None, **kwargs) -> None:
         logging.info('[{:s}] compute initial test loss and initial psnr'.format(self.__class__.__name__))
         device = kwargs.get('device', None)
         dtype = kwargs.get('dtype', None)
@@ -250,10 +250,10 @@ class TrainingMonitor(Callback):
                                                {'potential_{:d}'.format(i): np.exp(potential_param[i])
                                                 for i in range(0, len(potential_param))}, step + 1)
 
-    def on_train_end(self):
+    def on_train_end(self) -> None:
         self._visualise_training_stats()
 
-    def _visualise_training_stats(self):
+    def _visualise_training_stats(self) -> None:
         moving_average = compute_moving_average(np.array(self.train_loss_list), 10)
 
         fig = plt.figure(figsize=(11, 11))
