@@ -23,7 +23,7 @@ def orthogonal_projection_procrustes(x: torch.Tensor, eps: float=1e-7, max_num_i
     x_flattened = [x[i, 0, :, :].flatten() for i in range(0, x.shape[0])]
     x_stacked = torch.stack(x_flattened, dim=1)
     m, n = x_stacked.shape
-    diag = torch.diag(torch.ones(n))
+    diag = torch.diag(torch.ones(n, dtype=x.dtype, device=x.device))
 
     v_old = torch.zeros_like(x_stacked)
     for k in range(0, max_num_iterations):
@@ -39,7 +39,8 @@ def orthogonal_projection_procrustes(x: torch.Tensor, eps: float=1e-7, max_num_i
             break
         v_old = v.clone()
 
-    x_orthogonal = [torch.unflatten(v[:, j], dim=0, sizes=x.shape[-2:]) for j in range(0, v.shape[1])]
+    x_orthogonal = [torch.unflatten(torch.matmul(v, diag)[:, j], dim=0,
+                                    sizes=x.shape[-2:]) for j in range(0, v.shape[1])]
     return torch.stack(x_orthogonal, dim=0).unsqueeze(dim=1)
 
 class ImageFilter(torch.nn.Module):
