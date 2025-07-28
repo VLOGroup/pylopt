@@ -26,7 +26,6 @@ class StudentT(Potential):
             else:
                 raise ValueError('Unknown initialisation method')
             self.weight_tensor = torch.nn.Parameter(data=weights, requires_grad=trainable)
-
         else:
             dummy_data = torch.ones(num_marginals)
             self.weight_tensor = torch.nn.Parameter(data=dummy_data, requires_grad=trainable)
@@ -55,7 +54,6 @@ class StudentT(Potential):
         return result
 
     def _load_from_file(self, path_to_model: str, device: torch.device=torch.device('cpu')) -> None:
-
         potential_data = torch.load(path_to_model, map_location=device)
 
         initialisation_dict = potential_data['initialisation_dict']

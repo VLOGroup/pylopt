@@ -30,6 +30,15 @@ potential:
       file_path: ''
       multiplier: 1.0
     trainable: False
+  spline:
+    num_nodes: 9           # Does not need to be specified, if model is loaded from file
+    box_lower: -3           # Does not need to be specified, if model is loaded from file
+    box_upper: 3            # Does not need to be specified, if model is loaded from file
+    initialisation:
+      mode: 'uniform'
+      file_path: ''
+      multiplier: 1.0
+    trainable: False
 
 measurement_model:
   noise_level: 0.1

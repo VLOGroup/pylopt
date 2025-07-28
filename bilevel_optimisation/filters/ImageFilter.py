@@ -12,10 +12,10 @@ def zero_mean_projection(x: torch.Tensor) -> torch.Tensor:
 def orthogonal_projection_procrustes(x: torch.Tensor, eps: float=1e-7, max_num_iterations: int=5,
                                      rel_tol: float=1e-5) -> torch.Tensor:
     """
-    Function which applies the orthogonal procrustes scheme to orthogonalise a set/batch of filters
+    Function which applies the orthogonal procrustes scheme to orthogonalise a set of filters
 
     :param x: Filter tensor of shape [batch_size, 1, filter_dim, filter_dim]
-    :param eps:
+    :param eps: Clipping parameter to ensure positivity of diagonal elements
     :param max_num_iterations: Maximal number of iterations
     :param rel_tol: Tolerance used to stop iteration as soon the norm of subsequent iterates is less than rel_tol.
     :return: Orthogonalised set of filters in terms of a tensor of the same shape as the input tensor.
@@ -23,7 +23,7 @@ def orthogonal_projection_procrustes(x: torch.Tensor, eps: float=1e-7, max_num_i
     x_flattened = [x[i, 0, :, :].flatten() for i in range(0, x.shape[0])]
     x_stacked = torch.stack(x_flattened, dim=1)
     m, n = x_stacked.shape
-    diag = torch.diag(torch.ones(n))
+    diag = torch.diag(torch.ones(n, dtype=x.dtype, device=x.device))
 
     v_old = torch.zeros_like(x_stacked)
     for k in range(0, max_num_iterations):
