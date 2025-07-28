@@ -39,7 +39,8 @@ def orthogonal_projection_procrustes(x: torch.Tensor, eps: float=1e-7, max_num_i
             break
         v_old = v.clone()
 
-    x_orthogonal = [torch.unflatten(v[:, j], dim=0, sizes=x.shape[-2:]) for j in range(0, v.shape[1])]
+    x_orthogonal = [torch.unflatten(torch.matmul(v, diag)[:, j], dim=0,
+                                    sizes=x.shape[-2:]) for j in range(0, v.shape[1])]
     return torch.stack(x_orthogonal, dim=0).unsqueeze(dim=1)
 
 class ImageFilter(torch.nn.Module):
