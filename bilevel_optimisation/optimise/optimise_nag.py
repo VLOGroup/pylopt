@@ -113,10 +113,10 @@ def make_gradient_step(param: torch.nn.Parameter, grads: torch.Tensor, alpha: to
         param.sub_(alpha_ * grads)
         if hasattr(param, 'prox'):
             param.data.copy_(param.prox(param.data, alpha_))
-        if hasattr(param, 'zero_mean_projection'):
-            param.data.copy_(param.zero_mean_projection(param))
         if hasattr(param, 'orthogonal_projection'):
             param.data.copy_(param.orthogonal_projection(param))
+        if hasattr(param, 'zero_mean_projection'):
+            param.data.copy_(param.zero_mean_projection(param))
     else:
         param = param - alpha_ * grads
         if hasattr(param, 'prox'):

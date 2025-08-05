@@ -1,4 +1,3 @@
-
 import torch
 
 from bilevel_optimisation.filters.ImageFilter import ImageFilter

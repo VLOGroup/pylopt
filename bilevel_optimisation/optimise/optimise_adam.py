@@ -20,10 +20,10 @@ def create_projected_optimiser(base_optimiser: type[torch.optim.Optimizer]) -> t
                     for p in group['params']:
                         if not p.requires_grad:
                             continue
-                        if hasattr(p, 'zero_mean_projection'):
-                            p.data.copy_(p.zero_mean_projection(p.data))
                         if hasattr(p, 'orthogonal_projection'):
                             p.data.copy_(p.orthogonal_projection(p))
+                        if hasattr(p, 'zero_mean_projection'):
+                            p.data.copy_(p.zero_mean_projection(p.data))
             return loss
 
     ProjectedOptimiser.__name__ = 'Projected{:s}'.format(base_optimiser.__name__)

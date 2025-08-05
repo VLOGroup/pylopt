@@ -1,4 +1,4 @@
-from typing import Callable, Any, List, Dict
+from typing import Any, List, Dict
 import torch
 from torch.autograd import Function
 from torch.autograd.function import FunctionCtx

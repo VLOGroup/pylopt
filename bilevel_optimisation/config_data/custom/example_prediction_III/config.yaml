@@ -9,9 +9,14 @@ image_filter:
     file_path: '/home/florianthaler/Documents/research/bilevel_optimisation/bilevel_optimisation/model_data/foe_filters_7x7_chen-ranftl-pock_2014_scaled.pt'
 
 potential:
-  student_t:
+  spline:
+    num_nodes: 19
+    box_lower: -3
+    box_upper: 3
     initialisation:
-      file_path: '/home/florianthaler/Documents/research/bilevel_optimisation/bilevel_optimisation/model_data/potential_iter_17.pt'
+      mode: 'student_t'
+      file_path: ''
+    trainable: False
 
 energy:
-  lam: 10
+  lam: 0.5

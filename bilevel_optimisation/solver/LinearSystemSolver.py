@@ -4,7 +4,7 @@ import torch
 
 from bilevel_optimisation.data import SolverResult
 
-class LinearSystemSolver(ABC):
+class IterativeLinearSystemSolver(ABC):
 
     def __init__(self) -> None:
         pass

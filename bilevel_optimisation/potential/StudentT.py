@@ -1,10 +1,11 @@
 import os.path
-from typing import Dict, Any, Mapping, NamedTuple
+from typing import Dict, Any
 import torch
 from confuse import Configuration
 
 from bilevel_optimisation.potential.Potential import Potential
 
+@Potential.register_subclass('student_t')
 class StudentT(Potential):
     """
     Class implementing student-t potential for the usage in context of FoE models.
@@ -42,16 +43,8 @@ class StudentT(Potential):
     def forward_negative_log_marginal(self, x: torch.Tensor, j: int) -> torch.Tensor:
         return torch.log(1.0 + x ** 2) * torch.exp(self.weight_tensor[j])
 
-    def state_dict(self, *args, **kwargs) -> Dict[str, Any]:
-        state = super().state_dict(*args, **kwargs)
-        return state
-
     def initialisation_dict(self) -> Dict[str, Any]:
         return {'num_marginals': self.num_marginals}
-
-    def load_state_dict(self, state_dict: Mapping[str, Any], *args, **kwargs) -> NamedTuple:
-        result = torch.nn.Module.load_state_dict(self, state_dict, strict=True)
-        return result
 
     def _load_from_file(self, path_to_model: str, device: torch.device=torch.device('cpu')) -> None:
         potential_data = torch.load(path_to_model, map_location=device)

@@ -11,6 +11,7 @@ from bilevel_optimisation.fields_of_experts import FieldsOfExperts
 from bilevel_optimisation.filters import ImageFilter
 from bilevel_optimisation.potential import StudentT
 from bilevel_optimisation.proximal_maps.ProximalOperator import DenoisingProx
+from bilevel_optimisation.scheduler import NAGLipschitzDelimiter
 from bilevel_optimisation.utils.logging_utils import setup_logger
 from bilevel_optimisation.utils.seeding_utils import seed_random_number_generators
 from bilevel_optimisation.utils.file_system_utils import create_experiment_dir
@@ -32,7 +33,7 @@ def bilevel_learn(config: Configuration):
     potential = StudentT(image_filter.get_num_filters(), config)
     regulariser = FieldsOfExperts(potential, image_filter)
 
-    method_lower = 'adam'
+    method_lower = 'napg'
     if method_lower == 'nag':
         options_lower = {'max_num_iterations': 300, 'rel_tol': 1e-5, 'lip_const': 1e5, 'batch_optimisation': False}
     elif method_lower == 'napg':
@@ -57,9 +58,9 @@ def bilevel_learn(config: Configuration):
                  TrainingMonitor(test_image_dataset, config, method_lower, options_lower, l2_loss_func, path_to_eval_dir,
                                     evaluation_freq=2, tb_writer=tb_writer)]
 
-    method_upper = 'adam'
+    method_upper = 'nag'
     if method_upper == 'nag':
-        options_upper = {'max_num_iterations': 50, 'lip_const': [1]}
+        options_upper = {'max_num_iterations': 3000, 'lip_const': [1, 1], 'alternating': True}
     elif method_upper == 'adam':
         options_upper = {'max_num_iterations': 3000, 'lr': [1e-3], 'alternating': True}
     elif method_upper == 'lbfgs':
@@ -68,9 +69,10 @@ def bilevel_learn(config: Configuration):
     else:
         raise ValueError('Unknown optimisation method for upper level problem.')
 
+    schedulers = [NAGLipschitzDelimiter(lip_const_bound=2 ** 18, lip_const_key='lip_const')]
     bilevel_optimisation.learn(regulariser, lam, l2_loss_func, train_image_dataset,
                                optimisation_method_upper=method_upper, optimisation_options_upper=options_upper,
-                               dtype=dtype, device=device, callbacks=callbacks)
+                               dtype=dtype, device=device, callbacks=callbacks, schedulers=schedulers)
 
 def main():
     seed_random_number_generators(123)

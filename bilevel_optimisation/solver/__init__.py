@@ -1,1 +1,1 @@
-from bilevel_optimisation.solver.CGSolver import CGSolver, LinearSystemSolver
+from bilevel_optimisation.solver.CGSolver import CGSolver

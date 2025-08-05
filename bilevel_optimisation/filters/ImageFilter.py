@@ -87,10 +87,11 @@ class ImageFilter(torch.nn.Module):
             self._load_from_file(model_path)
 
         with torch.no_grad():
+            self.filter_tensor.copy_(zero_mean_projection(self.filter_tensor))
             if normalise:
                 self.filter_tensor.divide_(torch.linalg.norm(self.filter_tensor, dim=(-2, -1)).reshape(-1, 1, 1, 1))
             self.filter_tensor.mul_(multiplier)
-            self.filter_tensor.copy_(zero_mean_projection(self.filter_tensor))
+
 
         # define projections
         if not hasattr(self.filter_tensor, 'zero_mean_projection'):

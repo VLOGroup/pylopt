@@ -14,6 +14,7 @@ from bilevel_optimisation.optimise import step_adam, create_projected_optimiser,
 from bilevel_optimisation.optimise.optimise_adam import harmonise_param_groups_adam
 from bilevel_optimisation.optimise.optimise_lbfgs import harmonise_param_groups_lbfgs
 from bilevel_optimisation.optimise.optimise_nag import harmonise_param_groups_nag
+from bilevel_optimisation.scheduler import HyperParamScheduler
 from bilevel_optimisation.solver.CGSolver import CGSolver
 from bilevel_optimisation.utils.dataset_utils import collate_function
 from bilevel_optimisation.utils.file_system_utils import dump_config_file, create_experiment_dir
@@ -171,7 +172,8 @@ class BilevelOptimisation:
     def learn(self, regulariser: FieldsOfExperts, lam: float, upper_loss_func: Callable, dataset_train,
               optimisation_method_upper: str, optimisation_options_upper: Dict[str, Any],
               batch_size: int=32, crop_size: int=64, dtype: torch.dtype=torch.float32,
-              device: Optional[torch.device]=None, callbacks=None) -> None:
+              device: Optional[torch.device]=None, callbacks: Optional[List[Callback]]=None,
+              schedulers: Optional[List[HyperParamScheduler]]=None) -> None:
 
         device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         train_loader = DataLoader(dataset_train, batch_size=batch_size,
@@ -179,13 +181,13 @@ class BilevelOptimisation:
 
         if optimisation_method_upper == 'nag':
             self._learn_nag(regulariser, lam, upper_loss_func, optimisation_options_upper, train_loader,
-                            dtype, device, callbacks)
+                            dtype, device, callbacks, schedulers)
         elif optimisation_method_upper == 'adam':
             self._learn_adam(regulariser, lam, upper_loss_func, optimisation_options_upper, train_loader,
-                            dtype, device, callbacks)
+                            dtype, device, callbacks, schedulers)
         elif optimisation_method_upper == 'lbfgs':
             self._learn_lbfgs(regulariser, lam, upper_loss_func, optimisation_options_upper, train_loader,
-                            dtype, device, callbacks)
+                            dtype, device, callbacks, schedulers)
         elif optimisation_method_upper == 'your_custom_method':
             pass
         else:
@@ -194,18 +196,24 @@ class BilevelOptimisation:
     @torch.no_grad()
     def _learn_nag(self, regulariser: FieldsOfExperts, lam: float, upper_loss: Callable,
                    optimisation_options_upper: Dict[str, Any], train_loader: torch.utils.data.DataLoader,
-                   dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None) -> None:
+                   dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None,
+                   schedulers: Optional[List[HyperParamScheduler]]=None) -> None:
        if callbacks is None:
            callbacks = []
+       if schedulers is None:
+           schedulers = []
+
        regulariser = regulariser.to(device=device, dtype=dtype)
        param_groups = assemble_param_groups_nag(regulariser, **optimisation_options_upper)
        param_groups_ = harmonise_param_groups_nag(param_groups)
+
+       for sched in schedulers:
+           sched.bind(param_groups_)
 
        for cb in callbacks:
            cb.on_train_begin(regulariser, device=device, dtype=dtype)
 
        max_num_iterations = optimisation_options_upper['max_num_iterations']
-       jacobian_free = optimisation_options_upper.get('jacobian_free', False)
 
        try:
            for k, batch in enumerate(train_loader):
@@ -225,6 +233,9 @@ class BilevelOptimisation:
                for cb in callbacks:
                    cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)
 
+               for sched in schedulers:
+                   sched.step()
+
                logging.info('[TRAIN] iteration [{:d} / {:d}]: '
                             'loss = {:.5f}'.format(k + 1, max_num_iterations, loss.detach().cpu().item()))
 
@@ -237,26 +248,24 @@ class BilevelOptimisation:
 
     def _learn_adam(self, regulariser: FieldsOfExperts, lam: float, upper_loss: Callable,
                     optimisation_options_upper: Dict[str, Any], train_loader: torch.utils.data.DataLoader,
-                    dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None) -> None:
+                    dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None,
+                    schedulers: Optional[List[HyperParamScheduler]]=None) -> None:
         if callbacks is None:
             callbacks = []
+        if schedulers is None:
+            schedulers = []
 
         param_groups = assemble_param_groups_adam(regulariser, **optimisation_options_upper)
         param_groups_ = harmonise_param_groups_adam(param_groups)
 
-        optimiser = create_projected_optimiser(torch.optim.Adam)(param_groups_)
-
-        # # TODO
-        # #   > make me configurable ...
-        max_num_iterations = optimisation_options_upper['max_num_iterations']
-        num_iterations_1 = min(5000, max_num_iterations)
-        scheduler_1 = torch.optim.lr_scheduler.ConstantLR(optimiser, factor=1.0, total_iters=num_iterations_1)
-        scheduler_2 = torch.optim.lr_scheduler.CosineAnnealingLR(optimiser, T_max=max_num_iterations - num_iterations_1)
-        scheduler = torch.optim.lr_scheduler.ChainedScheduler([scheduler_1, scheduler_2], optimizer=optimiser)
+        for sched in schedulers:
+            sched.bind(param_groups_)
 
         for cb in callbacks:
             cb.on_train_begin(regulariser, device=device, dtype=dtype)
 
+        optimiser = create_projected_optimiser(torch.optim.Adam)(param_groups_)
+        max_num_iterations = optimisation_options_upper['max_num_iterations']
         try:
             for k, batch in enumerate(train_loader):
                 with torch.no_grad():
@@ -269,7 +278,8 @@ class BilevelOptimisation:
                     func = self._loss_func_factory(upper_loss, energy, batch_)
                     loss = step_adam(optimiser, func, param_groups_)
 
-                    scheduler.step()
+                    for sched in schedulers:
+                        sched.step()
 
                     for cb in callbacks:
                         cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)
@@ -286,18 +296,24 @@ class BilevelOptimisation:
 
     def _learn_lbfgs(self, regulariser: FieldsOfExperts, lam: float, upper_loss: Callable,
                     optimisation_options_upper: Dict[str, Any], train_loader: torch.utils.data.DataLoader,
-                    dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None) -> None:
+                    dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None,
+                    schedulers: Optional[List[HyperParamScheduler]]=None) -> None:
         if callbacks is None:
             callbacks = []
+        if schedulers is None:
+            schedulers = []
 
         param_groups_ = assemble_param_groups_lbfgs(regulariser, **optimisation_options_upper)
         param_groups_ = harmonise_param_groups_lbfgs(param_groups_)
         optimiser = create_projected_optimiser(torch.optim.LBFGS)(param_groups_)
 
-        max_num_iterations = optimisation_options_upper['max_num_iterations']
+        for sched in schedulers:
+            sched.bind(param_groups_)
+
         for cb in callbacks:
             cb.on_train_begin(regulariser, device=device, dtype=dtype)
 
+        max_num_iterations = optimisation_options_upper['max_num_iterations']
         try:
             for k, batch in enumerate(train_loader):
                 with torch.no_grad():
@@ -318,6 +334,9 @@ class BilevelOptimisation:
 
                     for cb in callbacks:
                         cb.on_step(k + 1, regulariser, torch.Tensor(loss), param_groups=param_groups_, device=device, dtype=dtype)
+
+                    for sched in schedulers:
+                        sched.step()
 
                     logging.info('[TRAIN] iteration [{:d} / {:d}]: '
                                  'loss = {:.5f}'.format(k + 1, max_num_iterations, loss))
