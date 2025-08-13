@@ -132,13 +132,17 @@ class PlotFiltersAndPotentials(Callback):
             filter_norms = [torch.linalg.norm(fltr).detach().cpu().item() for fltr in filters]
             filter_indices_sorted = np.argsort(filter_norms)[::-1].tolist()
 
-            x_lower = -1.0
-            x_upper = 1.0
+            t_lower = -1.0
+            t_upper = 1.0
+            num_steps = 111
 
             potential = regulariser.get_potential()
-            potential_weight_tensor = potential.get_parameters()
             num_marginals = potential.get_num_marginals()
             num_marginals_sqrt = int(math.sqrt(num_marginals)) + 1
+
+            t = torch.stack([torch.linspace(t_lower, t_upper, num_steps)
+                             for _ in range(0, num_marginals)]).unsqueeze(dim=1).unsqueeze(dim=0).to(device=device)
+            y = regulariser.get_potential().forward_negative_log(t, reduce=False)
 
             fig, axes = plt.subplots(num_marginals_sqrt, num_marginals_sqrt, figsize=(11, 11),
                                      gridspec_kw={'hspace': 0.9, 'wspace': 0.2}, sharex=True, sharey=True)
@@ -148,16 +152,18 @@ class PlotFiltersAndPotentials(Callback):
                     if potential_idx < potential.get_num_marginals():
                         idx = filter_indices_sorted[potential_idx]
 
-                        t = torch.linspace(x_lower, x_upper, 101).to(device=device, dtype=dtype)
-                        y = potential.forward_negative_log_marginal(t * filter_norms[idx], idx)
+                        axes[i, j].plot(t[0, potential_idx, 0, :].detach().cpu().numpy(),
+                                        y[0, potential_idx, 0, :].detach().cpu().numpy() -
+                                        torch.min(y[0, potential_idx, 0, :]).detach().cpu().numpy(), color='blue')
+                        if potential.__class__.__name__ == 'StudentT':
+                            potential_weight_tensor = potential.get_parameters()
+                            potential_weight = potential_weight_tensor[potential_idx].detach().cpu().item()
+                            axes[i, j].set_title('idx={:d}, \nweight={:.3f}'.format(idx, potential_weight),
+                                                 fontsize=8)
+                        else:
+                            axes[i, j].set_title('idx={:d}'.format(idx), fontsize=8)
 
-                        axes[i, j].plot(t.detach().cpu().numpy(), y.detach().cpu().numpy() -
-                                        torch.min(y).detach().cpu().numpy(), color='blue')
-
-                        potential_weight = potential_weight_tensor[potential_idx].detach().cpu().item()
-                        axes[i, j].set_title('idx={:d}, \nweight={:.3f}'.format(idx, potential_weight),
-                                             fontsize=8)
-                        axes[i, j].set_xlim(x_lower, x_upper)
+                        axes[i, j].set_xlim(t_lower, t_upper)
                     else:
                         fig.delaxes(axes[i, j])
 

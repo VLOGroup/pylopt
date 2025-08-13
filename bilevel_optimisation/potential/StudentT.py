@@ -1,5 +1,5 @@
 import os.path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import torch
 from confuse import Configuration
 
@@ -37,11 +37,11 @@ class StudentT(Potential):
     def get_parameters(self) -> torch.Tensor:
         return self.weight_tensor.data
 
-    def forward_negative_log(self, x: torch.Tensor) -> torch.Tensor:
-        return torch.einsum('bfhw,f->', torch.log(1.0 + x ** 2), torch.exp(self.weight_tensor))
-
-    def forward_negative_log_marginal(self, x: torch.Tensor, j: int) -> torch.Tensor:
-        return torch.log(1.0 + x ** 2) * torch.exp(self.weight_tensor[j])
+    def forward_negative_log(self, x: torch.Tensor, reduce: bool=True) -> torch.Tensor:
+        if reduce:
+            return torch.einsum('bfhw,f->', torch.log(1.0 + x ** 2), torch.exp(self.weight_tensor))
+        else:
+            return torch.einsum('bfhw,f->bfhw', torch.log(1.0 + x ** 2), torch.exp(self.weight_tensor))
 
     def initialisation_dict(self) -> Dict[str, Any]:
         return {'num_marginals': self.num_marginals}

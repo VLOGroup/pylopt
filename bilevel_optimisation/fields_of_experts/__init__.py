@@ -1,1 +1,2 @@
 from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
+from bilevel_optimisation.fields_of_experts.compilation import compile_regulariser

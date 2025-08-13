@@ -70,7 +70,7 @@ class NAGRestartScheduler(HyperParamScheduler):
                     if key in group.keys():
                         group[key] = self.base_values[idx].get(key, group[key])
 
-class NAGLipschitzDelimiter(HyperParamScheduler):
+class NAGLipConstGuard(HyperParamScheduler):
     def __init__(self, lip_const_bound: float, lip_const_key: str='lip_const'):
         super().__init__()
 
@@ -85,6 +85,6 @@ class NAGLipschitzDelimiter(HyperParamScheduler):
     def step(self) -> None:
         self.step_counter += 1
 
-        for idx, group in self.param_groups:
+        for group in self.param_groups:
             if self.lip_const_key in group.keys():
-                group[self.lip_const_key] = min(self.lip_const_bound, group[self.lip_const_key])
+                group[self.lip_const_key] = [min(self.lip_const_bound, item) for item in group[self.lip_const_key]]

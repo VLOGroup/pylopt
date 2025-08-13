@@ -1,5 +1,4 @@
-import os.path
-
+import os
 import torch
 from typing import Dict, Any, Mapping, NamedTuple
 from confuse import Configuration
@@ -92,7 +91,6 @@ class ImageFilter(torch.nn.Module):
                 self.filter_tensor.divide_(torch.linalg.norm(self.filter_tensor, dim=(-2, -1)).reshape(-1, 1, 1, 1))
             self.filter_tensor.mul_(multiplier)
 
-
         # define projections
         if not hasattr(self.filter_tensor, 'zero_mean_projection'):
             setattr(self.filter_tensor, 'zero_mean_projection', zero_mean_projection)
@@ -109,7 +107,8 @@ class ImageFilter(torch.nn.Module):
         return self.filter_tensor.shape[0]
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
-        x_padded = torch.nn.functional.pad(x, (self.padding, ) * 4, self.padding_mode)
+        x_padded = torch.nn.functional.pad(x, (self.padding, self.padding,
+                                               self.padding, self.padding), self.padding_mode)
         return torch.nn.functional.conv2d(x_padded, self.filter_tensor)
 
     def state_dict(self, *args, **kwargs) -> Dict[str, Any]:

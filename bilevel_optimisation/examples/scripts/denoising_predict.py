@@ -11,7 +11,7 @@ from bilevel_optimisation.fields_of_experts import FieldsOfExperts
 from bilevel_optimisation.filters import ImageFilter
 from bilevel_optimisation.lower_problem import solve_lower
 from bilevel_optimisation.measurement_model import MeasurementModel
-from bilevel_optimisation.potential import StudentT, QuarticSpline
+from bilevel_optimisation.potential import Potential
 from bilevel_optimisation.proximal_maps.ProximalOperator import DenoisingProx
 from bilevel_optimisation.utils.config_utils import load_app_config, parse_datatype
 from bilevel_optimisation.utils.dataset_utils import collate_function
@@ -62,8 +62,7 @@ def denoise(config: Configuration):
                              collate_fn=lambda x: collate_function(x, crop_size=-1))
 
     image_filter = ImageFilter(config)
-    # potential = StudentT(image_filter.get_num_filters(), config)
-    potential = QuarticSpline(image_filter.get_num_filters(), config)
+    potential = Potential.from_config(image_filter.get_num_filters(), config)
     regulariser = FieldsOfExperts(potential, image_filter)
 
     u_clean = list(test_loader)[0]
@@ -74,14 +73,15 @@ def denoise(config: Configuration):
     energy = Energy(measurement_model, regulariser, lam)
     energy.to(device=device, dtype=dtype)
 
+    # energy.compile()
+
     method = 'napg'
     if method == 'nag':
-        options = {'max_num_iterations': 1000, 'rel_tol': 1e-4, 'batch_optimisation': False}
+        options = {'max_num_iterations': 1000, 'rel_tol': 1e-7, 'batch_optimisation': True}
     elif method == 'napg':
         noise_level = config['measurement_model']['noise_level'].get()
         prox = DenoisingProx(noise_level=noise_level)
-        options = {'max_num_iterations': 300, 'rel_tol': 1e-5, 'prox': prox, 'beta': 0.71, 'alpha': 1e-4,
-                   'batch_optimisation': True}
+        options = {'max_num_iterations': 300, 'rel_tol': 1e-5, 'prox': prox, 'batch_optimisation': False}
     elif method == 'adam':
         options = {'max_num_iterations': 1000, 'rel_tol': 5e-4, 'lr': 1e-3, 'batch_optimisation': False}
     elif method == 'nag_unrolling':
@@ -90,6 +90,7 @@ def denoise(config: Configuration):
         options = {'max_num_iterations': 35, 'lip_const': 10, 'batch_optimisation': False}
     else:
         raise ValueError('Unknown solution method for lower level problem')
+
     with Timer(device=device) as t:
         lower_prob_result = solve_lower(energy=energy, method=method, options=options)
 

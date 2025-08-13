@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import torch
-from typing import Dict, Any, Mapping, NamedTuple, Callable, Type, Self
+from typing import Dict, Any, Mapping, NamedTuple, Callable, Type, Self, Optional
 from confuse import Configuration
 
 class Potential(ABC, torch.nn.Module):
@@ -57,8 +57,36 @@ class Potential(ABC, torch.nn.Module):
         pass
 
     @abstractmethod
-    def forward_negative_log(self, x: torch.Tensor) -> torch.Tensor:
+    def forward_negative_log(self, x: torch.Tensor, reduce: bool=True) -> torch.Tensor:
         pass
+
+            # @abstractmethod
+            # def first_derivative(self, x: torch.Tensor, grad_outputs: Optional[torch.Tensor]=None) -> torch.Tensor:
+            #     """
+            #     This function is intended to implement analytical derivatives whenever possible and suitable,
+            #     as is the case with splines.
+            #
+            #     :param x: PyTorch tensor representing the point at which derivative shall be computed.
+            #     :param grad_outputs: PyTorch tensor representing the vector the derivative is applied to.
+            #     :return: PyTorch tensor corresponding to the derivative of the potential function at x, applied
+            #         to grad_outputs.
+            #     """
+            #     pass
+            #
+            # @abstractmethod
+            # def second_derivative(self, x: torch.Tensor, grad_outputs: Optional[torch.Tensor]=None,
+            #                       mixed: bool=True) -> torch.Tensor:
+            #     """
+            #     As for the function first_derivative().
+            #
+            #     :param x: PyTorch tensor corresponding to the point at which derivative shall be computed.
+            #     :param grad_outputs: PyTorch tensor of the vector at which the derivative shall be appliled.
+            #     :param mixed: Flag indicating if mixed derivative needs to be computed. By default, the derivative
+            #         is computed w.r.t. the state variable x.
+            #     :return: Derivative of potential function at x, applied to grad_outputs in terms of a PyTorch tensor.
+            #     """
+            #     pass
+
 
     @abstractmethod
     def _load_from_file(self, path_to_model: str, device: torch.device=torch.device('cpu')) -> None:

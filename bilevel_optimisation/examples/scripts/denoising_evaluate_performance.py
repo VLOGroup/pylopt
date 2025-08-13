@@ -1,9 +1,10 @@
-import matplotlib.pyplot as plt
-from matplotlib import colormaps as cmaps
 import torch
 from torch.utils.data import DataLoader
 from confuse import Configuration
 import argparse
+from matplotlib import pyplot as plt
+from matplotlib import colormaps as cmaps
+
 
 from bilevel_optimisation.dataset.ImageDataset import TestImageDataset
 from bilevel_optimisation.energy import Energy
@@ -12,6 +13,7 @@ from bilevel_optimisation.filters import ImageFilter
 from bilevel_optimisation.lower_problem import solve_lower
 from bilevel_optimisation.measurement_model import MeasurementModel
 from bilevel_optimisation.potential import StudentT
+from bilevel_optimisation.proximal_maps.ProximalOperator import DenoisingProx
 from bilevel_optimisation.utils.config_utils import load_app_config, parse_datatype
 from bilevel_optimisation.utils.dataset_utils import collate_function
 from bilevel_optimisation.utils.evaluation_utils import compute_psnr
@@ -34,12 +36,15 @@ def evaluate_performance(config: Configuration):
 
     u_clean = list(test_loader)[0]
     u_clean = u_clean.to(device=device, dtype=dtype)
-    measurement_model = MeasurementModel(u_clean, config)
+    measurement_model = MeasurementModel(u_clean, config=config)
     lam = config['energy']['lam'].get()
     energy = Energy(measurement_model, regulariser, lam)
     energy.to(device=device, dtype=dtype)
 
-    options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'batch_optimisation': True}
+    noise_level = config['measurement_model']['noise_level'].get()
+    prox = DenoisingProx(noise_level=noise_level)
+    options_napg = {'max_num_iterations': 300, 'rel_tol': 1e-5, 'prox': prox, 'batch_optimisation': False}
+
     with Timer(device=device) as t:
         lower_prob_result = solve_lower(energy=energy, method='napg', options=options_napg)
 
@@ -68,7 +73,7 @@ def main():
     parser.add_argument('--configs')
     args = parser.parse_args()
     app_name = 'bilevel_optimisation'
-    configuring_module = '[DENOISING] predict'
+    configuring_module = '[DENOISING] evaluate'
     config = load_app_config(app_name, args.configs, configuring_module)
 
     evaluate_performance(config)

@@ -12,6 +12,18 @@ def compute_hvp_state(energy: Energy, u: torch.Tensor, v: torch.Tensor) -> torch
     Function which is used to compute the Hessian vector product of the lower level energy function w.r.t.
     the state variable u.
 
+    NOTE
+    ----
+        > The computation exploits the special structure of the energy function
+
+                (1 / (2 * sigma**2)) * | u - u_{noisy}| ** 2 + lam * regulariser(u)
+
+            and computes the second derivative simply as the sum of the exact second derivative
+            of the data fidelty term, and the second derivative of the regulariser using its
+            method second_derivative(). This allows to use autograd whenever needed, or
+            to circumvent autograd if analytical expressions for the derivatives are known (as
+            for splines).
+
     :param energy: PyTorch module representing the lower level energy funxtion
     :param u: Tensor at which second order derivative shall be computed
     :param v: Tensor at which the Hessian is applied
@@ -143,8 +155,6 @@ class ImplicitAutogradFunction(Function):
                                                                                    u_denoised, solver,
                                                                                    hessian_free=hessian_free)
         grad_params = compute_hvp_mixed(energy, u_denoised.detach(), lagrange_multiplier)
-
-
 
         energy.zero_grad()
 

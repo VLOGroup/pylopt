@@ -1,7 +1,8 @@
 import torch
 from abc import ABC
+from typing import Dict, Any
 
-from bilevel_optimisation.fields_of_experts import FieldsOfExperts
+from bilevel_optimisation.fields_of_experts import FieldsOfExperts, compile_regulariser
 from bilevel_optimisation.measurement_model import MeasurementModel
 
 class Energy(torch.nn.Module, ABC):
@@ -24,6 +25,23 @@ class Energy(torch.nn.Module, ABC):
         self.measurement_model = measurement_model
         self.regulariser = regulariser
         self.lam = lam
+
+    def compile(self, **compile_options: Dict[str, Any]) -> None:
+        """
+        Compilation of a regulariser using torch.compile().
+
+        NOTE
+        ----
+            > Per default the most aggressive compilation options are used.
+            > [IMPORTANT] When model shall be applied to different image shapes, then use the option dynamic=True.
+                By default, this option is applied. Additionally, note that several warm up calls are performed
+                using tensors of shape measurement_model.get_noisy_observation().shape.
+
+        :param compile_options: Optional compilation options
+        :return:
+        """
+        self.regulariser = compile_regulariser(self.regulariser,
+                                               self.measurement_model.get_noisy_observation(), **compile_options)
 
     def forward(self, u: torch.Tensor) -> torch.Tensor:
         """

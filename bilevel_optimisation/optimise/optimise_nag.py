@@ -147,8 +147,8 @@ def backtracking_line_search(param: torch.nn.Parameter, grads: torch.Tensor, clo
         _ = make_gradient_step(param, grads, 1 / lip_const)
 
         loss_new = closure()
-        quadr_approx = (loss + torch.sum(grads * (param - param_orig))
-                        + 0.5 * lip_const * torch.sum((param - param_orig) ** 2))
+        quadr_approx = (loss + torch.sum(grads * (param - param_orig), dim=[-3, -2, -1])
+                        + 0.5 * lip_const * torch.sum((param - param_orig) ** 2, dim=[-3, -2, -1]))
         sufficient_descent_met = loss_new <= quadr_approx
 
         param.data.copy_(param_orig)
@@ -197,7 +197,19 @@ def step_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[str, A
 
         params_flat = flatten_groups(param_groups)
         params_flat_ = [p.requires_grad_(True) for p in params_flat]
-        grads = grad_func(*params_flat_)[idx]
+
+        # NOTE
+        #   > Cloning the return value of grad_func is necessary to prevent
+        #       the following error when applying torch.compile():
+        #
+        #           [...]
+        #           RuntimeError: Error: accessing tensor output of CUDAGraphs that has been overwritten
+        #           by a subsequent run.
+        #           [...]
+        #           To prevent overwriting, clone the tensor outside of torch.compile() or call
+        #           torch.compiler.cudagraph_mark_step_begin() before each model invocation.
+        #
+        grads = grad_func(*params_flat_)[idx].clone()
 
         param = group.get('params')[0]
         if all(item is not None for item in group['alpha']):

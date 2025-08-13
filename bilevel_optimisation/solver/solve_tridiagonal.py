@@ -1,7 +1,4 @@
 import torch
-import numpy as np
-
-from bilevel_optimisation.utils.Timer import Timer
 
 def solve_tridiagonal(diag: torch.Tensor, diag_super: torch.Tensor, diag_sub: torch.Tensor,
                       rhs: torch.Tensor) -> torch.Tensor:
