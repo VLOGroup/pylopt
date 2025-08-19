@@ -14,7 +14,7 @@ from bilevel_optimisation.measurement_model import MeasurementModel
 from bilevel_optimisation.potential import Potential
 from bilevel_optimisation.proximal_maps.ProximalOperator import DenoisingProx
 from bilevel_optimisation.utils.config_utils import load_app_config, parse_datatype
-from bilevel_optimisation.utils.dataset_utils import collate_function
+from bilevel_optimisation.dataset.dataset_utils import collate_function
 from bilevel_optimisation.utils.evaluation_utils import compute_psnr
 from bilevel_optimisation.utils.logging_utils import setup_logger
 from bilevel_optimisation.utils.seeding_utils import seed_random_number_generators

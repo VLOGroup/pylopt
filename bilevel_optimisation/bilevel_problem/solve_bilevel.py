@@ -6,36 +6,42 @@ from confuse import Configuration
 from itertools import chain
 
 from bilevel_optimisation.bilevel_problem.gradients import ImplicitAutogradFunction, UnrollingAutogradFunction
+from bilevel_optimisation.bilevel_problem.parameter_groups import get_param_group_name, PARAM_GROUP_NAME_KEY
 from bilevel_optimisation.callbacks import Callback
 from bilevel_optimisation.energy.Energy import Energy
-from bilevel_optimisation.fields_of_experts.FieldsOfExperts import FieldsOfExperts
+from bilevel_optimisation.fields_of_experts import FieldsOfExperts
+from bilevel_optimisation.filters import ImageFilter
 from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementModel
 from bilevel_optimisation.optimise import step_adam, create_projected_optimiser, step_nag
 from bilevel_optimisation.optimise.optimise_adam import harmonise_param_groups_adam
 from bilevel_optimisation.optimise.optimise_lbfgs import harmonise_param_groups_lbfgs
 from bilevel_optimisation.optimise.optimise_nag import harmonise_param_groups_nag
+from bilevel_optimisation.potential import Potential
 from bilevel_optimisation.scheduler import HyperParamScheduler
 from bilevel_optimisation.solver.CGSolver import CGSolver
-from bilevel_optimisation.utils.dataset_utils import collate_function
-from bilevel_optimisation.utils.file_system_utils import dump_config_file, create_experiment_dir
+from bilevel_optimisation.dataset.dataset_utils import collate_function
+from bilevel_optimisation.utils.file_system_utils import create_experiment_dir, dump_configs, \
+    dump_bilevel_training_settings
 
 def assemble_param_groups_base(regulariser: FieldsOfExperts, alternating: bool=False):
     param_dict = {}
     for child in regulariser.children():
-        param_dict[child.__class__.__name__] = [p for p in child.parameters() if p.requires_grad]
+        key = get_param_group_name(child)
+        if key is None:
+            raise ValueError('Regulariser is supposed to have only children of '
+                             'type {:s}, {:s}'.format(ImageFilter.__name__, Potential.__name__))
+        param_dict[key] = [p for p in child.parameters() if p.requires_grad]
 
     param_groups = []
     if not alternating:
         group = {'params': list(chain.from_iterable([param_list for param_list in param_dict.values()])),
-                 'name': 'joint'}
+                 PARAM_GROUP_NAME_KEY: 'joint'}
         param_groups.append(group)
     else:
         for key, value in param_dict.items():
             if value:
-                group = {'params': value,
-                         'name': key}
+                group = {'params': value, PARAM_GROUP_NAME_KEY: key}
                 param_groups.append(group)
-
     return param_groups
 
 def assemble_param_groups_adam(regulariser: FieldsOfExperts, lr: Optional[List[float]]=None,
@@ -103,7 +109,7 @@ class BilevelOptimisation:
     an unrolling scheme. The unrolling scheme requires that the lower level problem is solved using NAG or NAPG.
     """
     def __init__(self, method_lower: str, options_lower: Dict[str, Any], config: Configuration,
-                 differentiation_method: str='implicit', solver: Optional[str]='cg',
+                 differentiation_method: str='implicit', solver_name: Optional[str]='cg',
                  options_solver: Optional[Dict[str, Any]]=None,
                  path_to_experiments_dir: Optional[str]=None) -> None:
         """
@@ -123,7 +129,7 @@ class BilevelOptimisation:
                 problem while not breaking the corresponding computational graph. Derivatives of the resulting
                 approximate solution of the lower level problem are then computed by means of autograd.
             Per default, implicit differentiation is applied.
-        :param solver: String indicating the linear system solver which is used to compute gradients when implicit
+        :param solver_name: String indicating the linear system solver which is used to compute gradients when implicit
             differentiation is applied. The default option is 'cg'.
         :param options_solver: Dictionary of options for the linear system solver. The cg solver takes the
             options
@@ -144,12 +150,17 @@ class BilevelOptimisation:
         self.config = config
         self.path_to_experiments_dir = create_experiment_dir(self.config) if path_to_experiments_dir is None \
             else path_to_experiments_dir
-        dump_config_file(self.config, self.path_to_experiments_dir)
+        dump_configs(self.config, self.path_to_experiments_dir)
 
-        if solver == 'cg':
-            options_solver = options_solver if options_solver is not None else {}
-            self.solver = CGSolver(**options_solver)
-        elif solver == 'your_custom_solver':
+        self.solver_name = solver_name
+        if self.solver_name == 'cg':
+            self.options_solver = options_solver if options_solver is not None else {}
+            self.solver = CGSolver(**self.options_solver)
+        elif self.solver_name == 'your_custom_solver':
+            # Custom linear system solver goes here. Use the following structure
+            #
+            #    self.options_solver = ...
+            #    self.solver = MySolver(**self.options_solver)
             pass
         else:
             raise ValueError('Unknown linear system solver')
@@ -173,7 +184,16 @@ class BilevelOptimisation:
               optimisation_method_upper: str, optimisation_options_upper: Dict[str, Any],
               batch_size: int=32, crop_size: int=64, dtype: torch.dtype=torch.float32,
               device: Optional[torch.device]=None, callbacks: Optional[List[Callback]]=None,
-              schedulers: Optional[List[HyperParamScheduler]]=None) -> None:
+              schedulers: Optional[List[HyperParamScheduler]]=None, do_compile: bool=False) -> None:
+
+        upper_settings = {'method': optimisation_method_upper, 'options': optimisation_options_upper}
+        options_lower_ = dict(self.options_solver)
+        options_lower_.update({'prox': True if 'prox' in self.options_lower.keys() else False})
+        lower_settings = {'method': self.method_lower, 'options': options_lower_}
+        backward_settings = {'method': self.backward_mode}
+        if self.backward_mode:
+            backward_settings.update({'options': {'solver': self.solver_name, 'solver_options': self.options_solver}})
+        dump_bilevel_training_settings(upper_settings, lower_settings, backward_settings, self.path_to_experiments_dir)
 
         device = device if device is not None else torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         train_loader = DataLoader(dataset_train, batch_size=batch_size,
@@ -181,7 +201,7 @@ class BilevelOptimisation:
 
         if optimisation_method_upper == 'nag':
             self._learn_nag(regulariser, lam, upper_loss_func, optimisation_options_upper, train_loader,
-                            dtype, device, callbacks, schedulers)
+                            dtype, device, do_compile, callbacks, schedulers)
         elif optimisation_method_upper == 'adam':
             self._learn_adam(regulariser, lam, upper_loss_func, optimisation_options_upper, train_loader,
                             dtype, device, callbacks, schedulers)
@@ -196,7 +216,8 @@ class BilevelOptimisation:
     @torch.no_grad()
     def _learn_nag(self, regulariser: FieldsOfExperts, lam: float, upper_loss: Callable,
                    optimisation_options_upper: Dict[str, Any], train_loader: torch.utils.data.DataLoader,
-                   dtype: torch.dtype, device: torch.device, callbacks: Optional[List[Callback]]=None,
+                   dtype: torch.dtype, device: torch.device, do_compile: bool,
+                   callbacks: Optional[List[Callback]]=None,
                    schedulers: Optional[List[HyperParamScheduler]]=None) -> None:
        if callbacks is None:
            callbacks = []
@@ -204,6 +225,34 @@ class BilevelOptimisation:
            schedulers = []
 
        regulariser = regulariser.to(device=device, dtype=dtype)
+       # if do_compile:
+       #     train_iter = iter(train_loader)
+       #     batch_0 = next(train_iter).to(dtype=dtype, device=device)
+       #     # NOTE:
+       #     #    > Use default compilation options here - in particular the dynamic shape option.
+       #     #    > Dynamic shapes are important here since the same model is used for training and testing (on full
+       #     #        images!)
+       #     regulariser = compile_regulariser(regulariser, batch_0, dynamic=True)
+
+       # DEBUG:begin
+       # train_iter = iter(train_loader)
+       # batch_0 = next(train_iter).to(dtype=dtype, device=device)
+       # with torch.enable_grad():
+       #     x = batch_0.detach().clone().requires_grad_(True).to(dtype=dtype, device=device)
+       #     y = regulariser.forward(x)
+       #     dy_dx = torch.autograd.grad(inputs=x, outputs=y, create_graph=True)[0]
+       #     grad_nodal = torch.autograd.grad(inputs=[p for p in regulariser.parameters() if p.requires_grad], outputs=y, create_graph=True)[0]
+       #
+       # dy_dx_ = (first_derivative..)
+       #
+       # -> mixed derivative does not exist?? why?
+       #
+       # d2y_dx2 = torch.autograd.grad(inputs=[p for p in regulariser.parameters() if p.requires_grad], outputs=dy_dx, grad_outputs=torch.rand_like(x))
+       #
+       # asdf
+       # DEBUG:end
+
+
        param_groups = assemble_param_groups_nag(regulariser, **optimisation_options_upper)
        param_groups_ = harmonise_param_groups_nag(param_groups)
 
@@ -234,7 +283,7 @@ class BilevelOptimisation:
                    cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)
 
                for sched in schedulers:
-                   sched.step()
+                   sched.step(func=func, grad_func=grad_func)
 
                logging.info('[TRAIN] iteration [{:d} / {:d}]: '
                             'loss = {:.5f}'.format(k + 1, max_num_iterations, loss.detach().cpu().item()))
@@ -278,8 +327,12 @@ class BilevelOptimisation:
                     func = self._loss_func_factory(upper_loss, energy, batch_)
                     loss = step_adam(optimiser, func, param_groups_)
 
+                    def grad_func(*params):
+                        with torch.enable_grad():
+                            loss_ = func(*params)
+                        return list(torch.autograd.grad(outputs=loss_, inputs=params))
                     for sched in schedulers:
-                        sched.step()
+                        sched.step(func=func, grad_func=grad_func)
 
                     for cb in callbacks:
                         cb.on_step(k + 1, regulariser, loss, param_groups=param_groups_, device=device, dtype=dtype)
@@ -323,9 +376,9 @@ class BilevelOptimisation:
                     energy = Energy(measurement_model, regulariser, lam)
                     energy = energy.to(device=device, dtype=dtype)
 
+                    func = self._loss_func_factory(upper_loss, energy, batch_)
                     def closure():
                         optimiser.zero_grad()
-                        func = self._loss_func_factory(upper_loss, energy, batch_)
                         with torch.enable_grad():
                             loss = func(*[p for p in energy.parameters() if p.requires_grad])
                             loss.backward()
@@ -333,10 +386,15 @@ class BilevelOptimisation:
                     loss = optimiser.step(closure)
 
                     for cb in callbacks:
-                        cb.on_step(k + 1, regulariser, torch.Tensor(loss), param_groups=param_groups_, device=device, dtype=dtype)
+                        cb.on_step(k + 1, regulariser, torch.Tensor(loss), param_groups=param_groups_,
+                                   device=device, dtype=dtype)
 
+                    def grad_func(*params):
+                        with torch.enable_grad():
+                            loss_ = func(*params)
+                        return list(torch.autograd.grad(outputs=loss_, inputs=params))
                     for sched in schedulers:
-                        sched.step()
+                        sched.step(func=func, grad_func=grad_func)
 
                     logging.info('[TRAIN] iteration [{:d} / {:d}]: '
                                  'loss = {:.5f}'.format(k + 1, max_num_iterations, loss))

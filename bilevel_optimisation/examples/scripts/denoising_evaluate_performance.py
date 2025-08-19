@@ -2,9 +2,6 @@ import torch
 from torch.utils.data import DataLoader
 from confuse import Configuration
 import argparse
-from matplotlib import pyplot as plt
-from matplotlib import colormaps as cmaps
-
 
 from bilevel_optimisation.dataset.ImageDataset import TestImageDataset
 from bilevel_optimisation.energy import Energy
@@ -15,7 +12,7 @@ from bilevel_optimisation.measurement_model import MeasurementModel
 from bilevel_optimisation.potential import StudentT
 from bilevel_optimisation.proximal_maps.ProximalOperator import DenoisingProx
 from bilevel_optimisation.utils.config_utils import load_app_config, parse_datatype
-from bilevel_optimisation.utils.dataset_utils import collate_function
+from bilevel_optimisation.dataset.dataset_utils import collate_function
 from bilevel_optimisation.utils.evaluation_utils import compute_psnr
 from bilevel_optimisation.utils.logging_utils import setup_logger
 from bilevel_optimisation.utils.seeding_utils import seed_random_number_generators
@@ -43,7 +40,7 @@ def evaluate_performance(config: Configuration):
 
     noise_level = config['measurement_model']['noise_level'].get()
     prox = DenoisingProx(noise_level=noise_level)
-    options_napg = {'max_num_iterations': 300, 'rel_tol': 1e-5, 'prox': prox, 'batch_optimisation': False}
+    options_napg = {'max_num_iterations': 500, 'rel_tol': 1e-5, 'prox': prox, 'batch_optimisation': False}
 
     with Timer(device=device) as t:
         lower_prob_result = solve_lower(energy=energy, method='napg', options=options_napg)

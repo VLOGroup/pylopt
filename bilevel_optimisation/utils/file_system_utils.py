@@ -1,13 +1,21 @@
 import os
 from confuse import Configuration
 from pathlib import Path
+from typing import Dict, Any
+import yaml
 
-def dump_config_file(config: Configuration, path_to_data_dir: str):
+def dump_configs(config: Configuration, path_to_data_dir: str) -> None:
     config_data = config.dump(full=True)
-    config_file_path = os.path.join(path_to_data_dir, 'config.dump')
-
+    config_file_path = os.path.join(path_to_data_dir, 'config.yaml')
     with open(config_file_path, 'w') as file:
         file.write(str(config_data))
+
+def dump_bilevel_training_settings(upper_settings: Dict[str, Any], lower_settings: Dict[str, Any],
+                                   backward_settings: Dict[str, Any],  path_to_data_dir: str) -> None:
+    settings_dict = {'upper_problem': upper_settings, 'lower_problem': lower_settings, 'backward': backward_settings}
+    settings_file_path = os.path.join(path_to_data_dir, 'bilevel_training_settings.yaml')
+    with open(settings_file_path, 'w') as file:
+        yaml.dump(settings_dict, file, sort_keys=False)
 
 def create_experiment_dir(config: Configuration) -> str:
     experiments_root_dir = config['data']['experiments']['root_dir'].get()
@@ -24,5 +32,4 @@ def create_experiment_dir(config: Configuration) -> str:
     path_to_eval_dir = os.path.join(experiments_root_dir, experiment_id)
     os.makedirs(path_to_eval_dir, exist_ok=True)
 
-    dump_config_file(config, path_to_eval_dir)
     return path_to_eval_dir

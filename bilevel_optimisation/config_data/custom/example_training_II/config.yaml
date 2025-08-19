@@ -3,14 +3,14 @@ image_filter:
   padding_mode: 'reflect'
   initialisation:
     mode: 'randn'
-  multiplier: 5.0
+    multiplier: 5.0
   trainable: True
 
 potential:
   student_t:
     initialisation:
       mode: 'uniform'
-    multiplier: 0.0001
+      multiplier: 0.0001
     trainable: True
 
 measurement_model:

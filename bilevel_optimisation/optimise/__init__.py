@@ -1,2 +1,3 @@
+from bilevel_optimisation.optimise.optimise_nag import LIP_CONST_KEY
 from bilevel_optimisation.optimise.optimise_nag import optimise_nag, step_nag, optimise_nag_unrolling
 from bilevel_optimisation.optimise.optimise_adam import create_projected_optimiser, optimise_adam, step_adam

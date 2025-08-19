@@ -4,7 +4,7 @@ from typing import Optional, List, Dict, Any, Tuple, Callable
 from bilevel_optimisation.data import LowerProblemResult, OptimiserResult
 from bilevel_optimisation.energy import Energy
 from bilevel_optimisation.measurement_model import MeasurementModel
-from bilevel_optimisation.optimise import optimise_nag, optimise_adam, optimise_nag_unrolling
+from bilevel_optimisation.optimise import optimise_nag, optimise_adam, optimise_nag_unrolling, LIP_CONST_KEY
 
 def make_prox_map(prox_operator: torch.nn.Module, u: torch.Tensor) -> Callable:
     def prox_map(x: torch.Tensor, tau: float) -> torch.Tensor:
@@ -27,7 +27,7 @@ def assemble_param_groups_nag(u: torch.Tensor, alpha: Optional[float]=None,
     num_optimisation_variables = 1 if batch_optimisation else u.shape[0]
     group['alpha'] = [alpha] * num_optimisation_variables if alpha is not None else [None] * num_optimisation_variables
     group['beta'] = [beta] * num_optimisation_variables if beta is not None else [None] * num_optimisation_variables
-    group['lip_const'] = [lip_const] * num_optimisation_variables if lip_const is not None \
+    group[LIP_CONST_KEY] = [lip_const] * num_optimisation_variables if lip_const is not None \
         else [None] * num_optimisation_variables
 
     return [group]

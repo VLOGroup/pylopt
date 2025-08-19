@@ -3,9 +3,10 @@ from typing import List, Dict, Any, Callable, Optional, Tuple
 import math
 
 from bilevel_optimisation.data import OptimiserResult
-from bilevel_optimisation.data.Constants import EPSILON, MAX_NUM_ITERATIONS_DEFAULT
 
-DEFAULTS_GROUP = {'alpha': 1e-4, 'beta': 0.71, 'theta': 0.0, 'lip_const': 1e5, 'max_num_backtracking_iterations': 10}
+MAX_NUM_ITERATIONS_DEFAULT = 1000
+LIP_CONST_KEY = 'lip_const'
+DEFAULTS_GROUP = {'alpha': 1e-4, 'beta': 0.71, 'theta': 0.0, LIP_CONST_KEY: 1e5, 'max_num_backtracking_iterations': 10}
 
 def harmonise_param_groups_nag(param_groups: List[Dict[str, Any]], break_graph: bool=False) -> List[Dict[str, Any]]:
     param_groups_merged = []
@@ -36,8 +37,8 @@ def harmonise_param_groups_nag(param_groups: List[Dict[str, Any]], break_graph: 
         if all(item is not None for item in group_['alpha']):
             pass
         elif all(item is None for item in group_['alpha']):
-            group_['lip_const'] = [item if item is not None else DEFAULTS_GROUP['lip_const']
-                                   for item in group['lip_const']]
+            group_[LIP_CONST_KEY] = [item if item is not None else DEFAULTS_GROUP[LIP_CONST_KEY]
+                                   for item in group[LIP_CONST_KEY]]
         else:
             group_['alpha'] = [item if item is not None else DEFAULTS_GROUP['alpha'] for item in group['alpha']]
 
@@ -49,14 +50,14 @@ def harmonise_param_groups_nag(param_groups: List[Dict[str, Any]], break_graph: 
 def flatten_groups(param_groups: List[Dict[str, Any]]) -> List[torch.Tensor]:
     return [p for group in param_groups for p in group['params']]
 
-def compute_relative_error(param_groups: List[Dict[str, Any]]) -> torch.Tensor:
+def compute_relative_error(param_groups: List[Dict[str, Any]], eps: float=1e-7) -> torch.Tensor:
     error = 0.0
     n = 0
     for group in param_groups:
         for p, p_old in zip(group['params'], group['history']):
             n += p.shape[0]
             error += torch.sum(torch.sqrt(torch.sum((p - p_old) ** 2, dim=(-2, -1)))
-                               / torch.sqrt(torch.sum(p_old ** 2, dim=(-2, -1)) + EPSILON))
+                               / torch.sqrt(torch.sum(p_old ** 2, dim=(-2, -1)) + eps))
     return error / n
 
 def make_intermediate_step(group: Dict[str, Any], in_place: bool=True) -> Dict[str, Any]:
@@ -221,10 +222,10 @@ def step_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[str, A
             def closure():
                 return func(*flatten_groups(param_groups))
 
-            lip_const = torch.tensor(group['lip_const'], dtype=param.dtype, device=param.device)
+            lip_const = torch.tensor(group[LIP_CONST_KEY], dtype=param.dtype, device=param.device)
             lip_const = backtracking_line_search(param, grads, closure, lip_const, rho_1, rho_2,
                                                  group['max_num_backtracking_iterations'])
-            group['lip_const'] = lip_const.tolist()
+            group[LIP_CONST_KEY] = lip_const.tolist()
 
     return torch.sum(func(*flatten_groups(param_groups)))
 
@@ -272,7 +273,7 @@ def backtracking_line_search_unrolling(param_groups: List[Dict[str, Any]], group
 
     loss = closure(param_groups)
 
-    lip_const = torch.tensor(group['lip_const'], dtype=param.dtype, device=param.device)
+    lip_const = torch.tensor(group[LIP_CONST_KEY], dtype=param.dtype, device=param.device)
     for k in range(0, max(1, max_num_iterations)):
         param_new = make_gradient_step(param, grads, 1 / lip_const, in_place=False)
 
@@ -338,7 +339,7 @@ def optimise_nag_unrolling(func: Callable, grad_func: Callable, param_groups: Li
                                                                               max_num_iterations=
                                                                               group['max_num_backtracking_iterations'])
                 param_new = make_gradient_step(param, grads, 1 / lip_const, in_place=False)
-                group_new = {**group, 'params': [param_new], 'lip_const': lip_const_new.tolist()}
+                group_new = {**group, 'params': [param_new], LIP_CONST_KEY: lip_const_new.tolist()}
 
             param_groups_new.append(group_new)
         param_groups_current = param_groups_new

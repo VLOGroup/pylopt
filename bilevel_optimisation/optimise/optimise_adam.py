@@ -48,10 +48,12 @@ def harmonise_param_groups_adam(param_groups: List[Dict[str, Any]]) -> List[Dict
     return param_groups_
 
 def step_adam(optimiser: torch.optim.Optimizer, func: Callable, param_groups: List[Dict[str, Any]]) -> torch.Tensor:
+    # update history
     for group in param_groups:
         for p, p_old in zip([p_ for p_ in group['params']], [p_ for p_ in group['history']]):
             p_old.data.copy_(p.data.clone())
 
+    # make adam step
     optimiser.zero_grad()
     params_flat = flatten_groups(param_groups)
     with torch.enable_grad():

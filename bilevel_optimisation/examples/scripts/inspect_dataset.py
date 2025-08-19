@@ -2,8 +2,8 @@ import matplotlib.pyplot as plt
 from torch.utils.data import DataLoader
 
 from bilevel_optimisation.dataset.ImageDataset import TrainingImageDataset
-from bilevel_optimisation.utils.SeedingUtils import seed_random_number_generators
-from bilevel_optimisation.utils.DatasetUtils import collate_function
+from bilevel_optimisation.utils.seeding_utils import seed_random_number_generators
+from bilevel_optimisation.dataset.dataset_utils import collate_function
 
 def main():
     root_path = '/home/florianthaler/Documents/data/image_data/BSDS300/images/train'
