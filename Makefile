@@ -1,5 +1,6 @@
 .PHONY: clean
 
 clean:
-	rm -rf build/ dist/ *.egg-info __pycache__/
+	find . -type d -name "__pycache__" -exec rm -rf {} +
+	rm -rf build/ dist/ *.egg-info
 

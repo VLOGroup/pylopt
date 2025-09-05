@@ -187,7 +187,7 @@ class BilevelOptimisation:
               schedulers: Optional[List[HyperParamScheduler]]=None, do_compile: bool=False) -> None:
 
         upper_settings = {'method': optimisation_method_upper, 'options': optimisation_options_upper}
-        options_lower_ = dict(self.options_solver)
+        options_lower_ = dict(self.options_lower)
         options_lower_.update({'prox': True if 'prox' in self.options_lower.keys() else False})
         lower_settings = {'method': self.method_lower, 'options': options_lower_}
         backward_settings = {'method': self.backward_mode}

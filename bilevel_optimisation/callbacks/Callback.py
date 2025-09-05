@@ -22,7 +22,7 @@ from bilevel_optimisation.energy import Energy
 from bilevel_optimisation.fields_of_experts import FieldsOfExperts
 from bilevel_optimisation.lower_problem import solve_lower
 from bilevel_optimisation.measurement_model import MeasurementModel
-from bilevel_optimisation.optimise import LIP_CONST_KEY
+from bilevel_optimisation.optimise import LIP_CONST_KEY, LR_KEY
 from bilevel_optimisation.utils.evaluation_utils import compute_psnr
 from bilevel_optimisation.utils.Timer import Timer
 
@@ -236,6 +236,7 @@ class PlotFiltersAndPotentials(Callback):
 class TrainingMonitor(Callback):
 
     TENSORBOARD_TAGS = {'loss': 'loss/train', 'test_loss': 'loss/test', 'test_psnr': 'test_psnr'}
+    HYPERPARAM_KEYS = {LIP_CONST_KEY, LR_KEY}
 
     def __init__(self, dataset: Dataset, config: Configuration, method: str, options: Dict[str, Any],
                  loss_func: Callable, path_to_data_dir: str, evaluation_freq: int=2,
@@ -261,7 +262,7 @@ class TrainingMonitor(Callback):
         self.training_stats_dict_list = []
         self.potential_params_list = []
 
-        self.lip_const_dict = {}
+        self.hyperparam_dict = {}
 
     def on_train_begin(self, regulariser: Optional[FieldsOfExperts]=None, **kwargs) -> None:
         logging.info('[{:s}] compute initial test loss and initial psnr'.format(self.__class__.__name__))
@@ -287,15 +288,18 @@ class TrainingMonitor(Callback):
         if param_groups:
             for group in param_groups:
                 name = group.get(PARAM_GROUP_NAME_KEY, '')
-                lip_const = group.get(LIP_CONST_KEY, [-1])
-                logging.info('[{:s}] lipschitz constant for group {:s}: '
-                             '{:.3f}'.format(self.__class__.__name__, name, lip_const[-1]))
-                if not name in self.lip_const_dict.keys():
-                    self.lip_const_dict[name] = []
-                self.lip_const_dict[name].append(lip_const[-1])
 
-                if self.tb_writer:
-                    self.tb_writer.add_scalar('{:s}/{:s}'.format(LIP_CONST_KEY, name), lip_const[-1], step + 1)
+                for key in self.HYPERPARAM_KEYS:
+                    if key in group.keys():
+                        hparam = group[key][-1]
+                        if not key in self.hyperparam_dict:
+                            self.hyperparam_dict[key] = {name: []}
+
+                        logging.info('[{:s}] {:s} for group {:s}: '
+                                     '{:.3f}'.format(self.__class__.__name__, key, name, hparam))
+                        self.hyperparam_dict[key][name].append(hparam)
+                        if self.tb_writer:
+                            self.tb_writer.add_scalar('{:s}/{:s}'.format(key, name), hparam, step + 1)
 
     def _log_training_stats(self, step: int, regulariser: Optional[FieldsOfExperts], loss: Optional[torch.Tensor],
                             device: Optional[torch.device], dtype: Optional[torch.dtype]) -> None:
@@ -341,6 +345,22 @@ class TrainingMonitor(Callback):
         self._visualise_training_stats(train_loss_list, test_loss_list, test_psnr_list)
         self._export_model_ranking(df[['step', 'fitness']].dropna())
 
+    def _visualise_hyperparam_stats(
+            self, 
+            hyperparam_list: List[float], 
+            hyperparam_name: str) -> None:
+        
+        fig = plt.figure(figsize=(11, 11))
+        ax = fig.add_subplot(1, 1, 1)
+        ax.plot(self.evaluation_freq * np.arange(0, len(hyperparam_list)), hyperparam_list)
+
+        ax.set_title('evolution of {:s} for upper level problem'.format(hyperparam_name))
+        ax.xaxis.get_major_locator().set_params(integer=True)
+        ax.set_xlabel('iteration')
+
+        plt.savefig(os.path.join(self.path_to_data_dir, 'hyperparam_stats.png'))
+        plt.close(fig)
+
     def _visualise_training_stats(self, train_loss_list: List[float], test_loss_list: List[float],
                                   test_psnr_list: List[float]) -> None:
 
@@ -350,9 +370,10 @@ class TrainingMonitor(Callback):
 
         ax_1 = fig.add_subplot(1, 2, 1)
         ax_1.set_title('training loss')
-        ax_1.plot(np.arange(0, len(train_loss_list)), train_loss_list, label='train loss')
-        ax_1.plot(np.arange(0, len(moving_average)), moving_average, color='orange',
-                  label='moving average of train loss')
+        ax_1.plot(self.evaluation_freq * np.arange(0, len(train_loss_list)), 
+                  train_loss_list, label='train loss')
+        ax_1.plot(self.evaluation_freq * np.arange(0, len(moving_average)), 
+                  moving_average, color='orange', label='moving average of train loss')
         ax_1.plot(self.evaluation_freq * np.arange(0, len(test_loss_list)), test_loss_list,
                   color='cyan', label='test loss')
         ax_1.xaxis.get_major_locator().set_params(integer=True)

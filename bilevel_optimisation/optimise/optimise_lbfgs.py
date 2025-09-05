@@ -1,6 +1,8 @@
 from typing import List, Dict, Any
 
-DEFAULTS_GROUP_LBFGS = {'lr': 1, 'max_iter': 20, 'max_eval': 25, 'tolerance_grad': 1e-7,
+from bilevel_optimisation.optimise.optimise_adam import LR_KEY
+
+DEFAULTS_GROUP_LBFGS = {LR_KEY: 1, 'max_iter': 20, 'max_eval': 25, 'tolerance_grad': 1e-7,
                         'tolerance_change': 1e-9, 'history_size': 20, 'line_search_fn': None}
 
 def harmonise_param_groups_lbfgs(param_groups: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

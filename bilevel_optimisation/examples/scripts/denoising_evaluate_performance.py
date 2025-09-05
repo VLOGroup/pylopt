@@ -40,7 +40,7 @@ def evaluate_performance(config: Configuration):
 
     noise_level = config['measurement_model']['noise_level'].get()
     prox = DenoisingProx(noise_level=noise_level)
-    options_napg = {'max_num_iterations': 500, 'rel_tol': 1e-5, 'prox': prox, 'batch_optimisation': False}
+    options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-7, 'prox': prox, 'batch_optimisation': False}
 
     with Timer(device=device) as t:
         lower_prob_result = solve_lower(energy=energy, method='napg', options=options_napg)
