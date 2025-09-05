@@ -61,7 +61,7 @@ def bilevel_learn(config: Configuration):
                                  path_to_eval_dir, evaluation_freq=2, tb_writer=tb_writer)]
 
     method_upper = 'adam'
-    max_num_iterations = 5000
+    max_num_iterations = 5
     if method_upper == 'nag':
         options_upper = {'max_num_iterations': max_num_iterations, 'lip_const': [1000], 'alternating': True}
     elif method_upper == 'adam':

@@ -291,7 +291,7 @@ class TrainingMonitor(Callback):
 
                 for key in self.HYPERPARAM_KEYS:
                     if key in group.keys():
-                        hparam = group[key][-1]
+                        hparam = group[key]
                         if not key in self.hyperparam_dict:
                             self.hyperparam_dict[key] = {name: []}
 
@@ -337,26 +337,32 @@ class TrainingMonitor(Callback):
 
     def on_train_end(self) -> None:
         df = pd.DataFrame.from_dict(self.training_stats_dict_list)
-
         train_loss_list = df['loss'].dropna().to_list()
         test_loss_list = df['test_loss'].dropna().to_list()
         test_psnr_list = df['test_psnr'].dropna().to_list()
-
         self._visualise_training_stats(train_loss_list, test_loss_list, test_psnr_list)
+
+        for key in self.hyperparam_dict:
+            self._visualise_hyperparam_stats(self.hyperparam_dict[key], key)
+
         self._export_model_ranking(df[['step', 'fitness']].dropna())
 
     def _visualise_hyperparam_stats(
             self, 
-            hyperparam_list: List[float], 
-            hyperparam_name: str) -> None:
-        
+            hparam_dict: Dict[str, List[float]], 
+            hyperparam_name: str
+    ) -> None:
         fig = plt.figure(figsize=(11, 11))
-        ax = fig.add_subplot(1, 1, 1)
-        ax.plot(self.evaluation_freq * np.arange(0, len(hyperparam_list)), hyperparam_list)
 
-        ax.set_title('evolution of {:s} for upper level problem'.format(hyperparam_name))
-        ax.xaxis.get_major_locator().set_params(integer=True)
-        ax.set_xlabel('iteration')
+        num_param_groups = len(hparam_dict.keys())
+        ax_list = [fig.add_subplot(1, num_param_groups, i + 1) for i in range(0, num_param_groups)]
+        
+        for ax, group_key, hparam_list in zip(ax_list, hparam_dict.keys(), hparam_dict.values()):
+            ax.plot(self.evaluation_freq * np.arange(0, len(hparam_list)), hparam_list)
+
+            ax.set_title('evolution of {:s}/{:s} for upper level problem'.format(hyperparam_name, group_key))
+            ax.xaxis.get_major_locator().set_params(integer=True)
+            ax.set_xlabel('iteration')
 
         plt.savefig(os.path.join(self.path_to_data_dir, 'hyperparam_stats.png'))
         plt.close(fig)
