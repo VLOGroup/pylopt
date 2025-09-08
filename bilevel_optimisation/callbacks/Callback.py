@@ -288,16 +288,18 @@ class TrainingMonitor(Callback):
         if param_groups:
             for group in param_groups:
                 name = group.get(PARAM_GROUP_NAME_KEY, '')
+                if not name in self.hyperparam_dict.keys():
+                    self.hyperparam_dict[name] = {}
 
                 for key in self.HYPERPARAM_KEYS:
                     if key in group.keys():
                         hparam = group[key]
-                        if not key in self.hyperparam_dict:
-                            self.hyperparam_dict[key] = {name: []}
+                        if not key in self.hyperparam_dict[name]:
+                            self.hyperparam_dict[name][key] = []
 
                         logging.info('[{:s}] {:s} for group {:s}: '
                                      '{:.3f}'.format(self.__class__.__name__, key, name, hparam))
-                        self.hyperparam_dict[key][name].append(hparam)
+                        self.hyperparam_dict[name][key].append(hparam)
                         if self.tb_writer:
                             self.tb_writer.add_scalar('{:s}/{:s}'.format(key, name), hparam, step + 1)
 
@@ -342,27 +344,36 @@ class TrainingMonitor(Callback):
         test_psnr_list = df['test_psnr'].dropna().to_list()
         self._visualise_training_stats(train_loss_list, test_loss_list, test_psnr_list)
 
-        for key in self.hyperparam_dict:
-            self._visualise_hyperparam_stats(self.hyperparam_dict[key], key)
+
+        self._visualise_hyperparam_stats()
 
         self._export_model_ranking(df[['step', 'fitness']].dropna())
 
-    def _visualise_hyperparam_stats(
-            self, 
-            hparam_dict: Dict[str, List[float]], 
-            hyperparam_name: str
-    ) -> None:
-        fig = plt.figure(figsize=(11, 11))
-
-        num_param_groups = len(hparam_dict.keys())
-        ax_list = [fig.add_subplot(1, num_param_groups, i + 1) for i in range(0, num_param_groups)]
+    def _visualise_hyperparam_stats(self) -> None:
         
-        for ax, group_key, hparam_list in zip(ax_list, hparam_dict.keys(), hparam_dict.values()):
-            ax.plot(self.evaluation_freq * np.arange(0, len(hparam_list)), hparam_list)
 
-            ax.set_title('evolution of {:s}/{:s} for upper level problem'.format(hyperparam_name, group_key))
-            ax.xaxis.get_major_locator().set_params(integer=True)
-            ax.set_xlabel('iteration')
+        num_param_groups = len(self.hyperparam_dict.keys())
+        num_hparams = max(len(self.hyperparam_dict[param_name].keys()) 
+            for param_name in self.hyperparam_dict
+        )
+
+        fig, axes = plt.subplots(num_param_groups, num_hparams, figsize=(7, 9), squeeze=False, gridspec_kw={"hspace": 0.5})
+
+        for i, group_name in enumerate(self.hyperparam_dict.keys()):
+            for j, hparam_key in enumerate(self.hyperparam_dict[group_name]):
+                hparam_list = self.hyperparam_dict[group_name][hparam_key]
+
+                axes[i, j].plot(self.evaluation_freq * np.arange(0, len(hparam_list)), hparam_list)
+                axes[i, j].set_title('evolution of {:s}/{:s} for upper level problem'.format(group_name, hparam_key))
+                axes[i, j].xaxis.get_major_locator().set_params(integer=True)
+                axes[i, j].set_xlabel('iteration')
+
+        # for ax, hparam_key, hparam_list in zip(ax_list, hparam_dict.keys(), hparam_dict.values()):
+        #     ax.plot(self.evaluation_freq * np.arange(0, len(hparam_list)), hparam_list)
+
+        #     ax.set_title('evolution of {:s}/{:s} for upper level problem'.format(param_name, hparam_key))
+        #     ax.xaxis.get_major_locator().set_params(integer=True)
+        #     ax.set_xlabel('iteration')
 
         plt.savefig(os.path.join(self.path_to_data_dir, 'hyperparam_stats.png'))
         plt.close(fig)
