@@ -13,3 +13,7 @@ build==1.2.2.post1
 tensorboard==2.19.0
 jupyter==1.1.1
 seaborn==0.13.2
+
+ninja==0.13.0
+bspline_cuda_extension==0.2.1
+

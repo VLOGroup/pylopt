@@ -1,3 +1,39 @@
 [build-system]
 requires = ['setuptools>=61.0']
 build-backend = 'setuptools.build_meta'
+
+[project]
+name = 'PyLOpt'
+version = attr: bilevel_optimisation.__version__
+dependencies = [
+    torch>=2.6.0
+    numpy>=2.0.2
+    confuse>=2.0.1
+    scipy>=1.15.2
+    opencv-python-headless>=4.11.0.86
+    matplotlib>=3.10.1
+    PyQt5>=5.15.11
+    torchvision>=0.21.0
+    pillow>=11.1.0
+]
+requires-python = ">=3.11"
+authors = [
+    {name = 'Florian Thaler', email = 'florian.thaler@tugraz.at'},
+    {name = 'Thomas Pock'}
+]
+maintainers=[
+    {name = 'Florian Thaler', email = 'florian.thaler@tugraz.at'}
+]
+description = 'PyLevel Optimisation: A Python library for bilevel optimisation'
+readme = 'README.md'
+license = 'MIT'
+keywords = ['PyLOpt', 'Bilevel optimisation', 'Image reconstruction']
+classifiers = ['Programming Language :: Python :: 3']
+
+[tool.setuptools.packages.find]
+where = ['.']
+exclude = ['tests*', 'docs*', 'data*', 'data_analysis*', 'images*', 'artefacts*']
+
+[project.urls]
+Documentation = ''
+Repository = ''

@@ -102,8 +102,9 @@ class CosineAnnealingLRScheduler(HyperParamScheduler):
         :param lr_min: Minimal learning rate
         :param lr_key: Key of learning within parameter groups
         :param restart_cycle: Optional integer indicating the after how many iterations (within the annealing window)
-            a restart shall be performed
-        :param restart_cycle_multi: Multiplier to adjust length of the restart cycle over training
+            a restart shall be performed; if None no restarts were performed.
+        :param restart_cycle_multi: Multiplier to adjust length of the restart cycle over training; if None
+            the restart cycles keep the same length.
         """
         super().__init__()
 

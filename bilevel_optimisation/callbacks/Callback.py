@@ -350,12 +350,9 @@ class TrainingMonitor(Callback):
         self._export_model_ranking(df[['step', 'fitness']].dropna())
 
     def _visualise_hyperparam_stats(self) -> None:
-        
-
         num_param_groups = len(self.hyperparam_dict.keys())
         num_hparams = max(len(self.hyperparam_dict[param_name].keys()) 
-            for param_name in self.hyperparam_dict
-        )
+            for param_name in self.hyperparam_dict)
 
         fig, axes = plt.subplots(num_param_groups, num_hparams, figsize=(7, 9), squeeze=False, gridspec_kw={"hspace": 0.5})
 
@@ -367,13 +364,6 @@ class TrainingMonitor(Callback):
                 axes[i, j].set_title('evolution of {:s}/{:s} for upper level problem'.format(group_name, hparam_key))
                 axes[i, j].xaxis.get_major_locator().set_params(integer=True)
                 axes[i, j].set_xlabel('iteration')
-
-        # for ax, hparam_key, hparam_list in zip(ax_list, hparam_dict.keys(), hparam_dict.values()):
-        #     ax.plot(self.evaluation_freq * np.arange(0, len(hparam_list)), hparam_list)
-
-        #     ax.set_title('evolution of {:s}/{:s} for upper level problem'.format(param_name, hparam_key))
-        #     ax.xaxis.get_major_locator().set_params(integer=True)
-        #     ax.set_xlabel('iteration')
 
         plt.savefig(os.path.join(self.path_to_data_dir, 'hyperparam_stats.png'))
         plt.close(fig)

@@ -84,20 +84,25 @@ def build_objective_func(energy: Energy, batch_optim: bool, use_prox: bool) -> C
             per_sample_energy_models.append(sample_energy)
 
         # RECALL
-        #   > torch.vmap cannot be used for a list of different maps.
+        #   > torch.vmap cannot be used for vectorisation of a list of different maps.
         def func(*x: torch.Tensor) -> torch.Tensor:
             return torch.stack([sample_energy_model(sample.unsqueeze(dim=0)) for sample_energy_model, sample in
                                 zip(per_sample_energy_models, torch.cat(x, dim=0))])
 
         return func
     else:
+        # TODO
+        #   > update me: using vmap here is rather bad ...
+        #   > make profit of reduce=True/False implementation of potential functions ...
+
         regulariser = energy.regulariser
         lam = energy.lam
         def per_sample_objective_func(x) -> torch.Tensor:
-            return lam * regulariser(x.unsqueeze(dim=0))
+            return lam * regulariser(x)
 
         def func(*x: torch.Tensor) -> torch.Tensor:
             return torch.vmap(per_sample_objective_func)(torch.cat(x, dim=0))
+
 
     return func
 

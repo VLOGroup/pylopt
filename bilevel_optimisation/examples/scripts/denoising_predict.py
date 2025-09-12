@@ -77,7 +77,7 @@ def denoise(config: Configuration):
 
     method = 'napg'
     if method == 'nag':
-        options = {'max_num_iterations': 1000, 'rel_tol': 1e-7, 'batch_optimisation': True}
+        options = {'max_num_iterations': 1000, 'rel_tol': 1e-7, 'batch_optimisation': False}
     elif method == 'napg':
         noise_level = config['measurement_model']['noise_level'].get()
         prox = DenoisingProx(noise_level=noise_level)

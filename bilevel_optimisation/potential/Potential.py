@@ -45,7 +45,7 @@ class Potential(ABC, torch.nn.Module):
         potential_type = list(config['potential'].get().keys())[-1]
         subclass = cls.registry.get(potential_type, None)
         if subclass is None:
-            raise
+            raise ValueError('Unable to load potential – unknown class type.')
         return subclass(num_marginals=num_marginals, config=config, **kwargs)
 
     @abstractmethod

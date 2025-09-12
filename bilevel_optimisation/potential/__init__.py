@@ -1,3 +1,3 @@
 from bilevel_optimisation.potential.StudentT import StudentT
-from bilevel_optimisation.potential.Spline import NaturalCubicSpline
+from bilevel_optimisation.potential.Spline import QuarticBSpline
 from bilevel_optimisation.potential.Potential import Potential
