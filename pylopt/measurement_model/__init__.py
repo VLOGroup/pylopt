@@ -1,1 +1,1 @@
-from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementModel
+from pylopt.measurement_model.MeasurementModel import MeasurementModel

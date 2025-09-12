@@ -1,10 +1,10 @@
 import torch
 from typing import Optional, List, Dict, Any, Tuple, Callable
 
-from bilevel_optimisation.data import LowerProblemResult, OptimiserResult
-from bilevel_optimisation.energy import Energy
-from bilevel_optimisation.measurement_model import MeasurementModel
-from bilevel_optimisation.optimise import optimise_nag, optimise_adam, optimise_nag_unrolling, LIP_CONST_KEY
+from pylopt.data import LowerProblemResult, OptimiserResult
+from pylopt.energy import Energy
+from pylopt.measurement_model import MeasurementModel
+from pylopt.optimise import optimise_nag, optimise_adam, optimise_nag_unrolling, LIP_CONST_KEY
 
 def make_prox_map(prox_operator: torch.nn.Module, u: torch.Tensor) -> Callable:
     def prox_map(x: torch.Tensor, tau: float) -> torch.Tensor:

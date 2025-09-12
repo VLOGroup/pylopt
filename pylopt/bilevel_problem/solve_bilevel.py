@@ -5,22 +5,22 @@ import logging
 from confuse import Configuration
 from itertools import chain
 
-from bilevel_optimisation.bilevel_problem.gradients import ImplicitAutogradFunction, UnrollingAutogradFunction
-from bilevel_optimisation.bilevel_problem.parameter_groups import get_param_group_name, PARAM_GROUP_NAME_KEY
-from bilevel_optimisation.callbacks import Callback
-from bilevel_optimisation.energy.Energy import Energy
-from bilevel_optimisation.fields_of_experts import FieldsOfExperts
-from bilevel_optimisation.filters import ImageFilter
-from bilevel_optimisation.measurement_model.MeasurementModel import MeasurementModel
-from bilevel_optimisation.optimise import step_adam, create_projected_optimiser, step_nag
-from bilevel_optimisation.optimise.optimise_adam import harmonise_param_groups_adam
-from bilevel_optimisation.optimise.optimise_lbfgs import harmonise_param_groups_lbfgs
-from bilevel_optimisation.optimise.optimise_nag import harmonise_param_groups_nag
-from bilevel_optimisation.potential import Potential
-from bilevel_optimisation.scheduler import HyperParamScheduler
-from bilevel_optimisation.solver.CGSolver import CGSolver
-from bilevel_optimisation.dataset.dataset_utils import collate_function
-from bilevel_optimisation.utils.file_system_utils import create_experiment_dir, dump_configs, \
+from pylopt.bilevel_problem.gradients import ImplicitAutogradFunction, UnrollingAutogradFunction
+from pylopt.bilevel_problem.parameter_groups import get_param_group_name, PARAM_GROUP_NAME_KEY
+from pylopt.callbacks import Callback
+from pylopt.energy.Energy import Energy
+from pylopt.fields_of_experts import FieldsOfExperts
+from pylopt.filters import ImageFilter
+from pylopt.measurement_model.MeasurementModel import MeasurementModel
+from pylopt.optimise import step_adam, create_projected_optimiser, step_nag
+from pylopt.optimise.optimise_adam import harmonise_param_groups_adam
+from pylopt.optimise.optimise_lbfgs import harmonise_param_groups_lbfgs
+from pylopt.optimise.optimise_nag import harmonise_param_groups_nag
+from pylopt.potential import Potential
+from pylopt.scheduler import HyperParamScheduler
+from pylopt.solver.CGSolver import CGSolver
+from pylopt.dataset.dataset_utils import collate_function
+from pylopt.utils.file_system_utils import create_experiment_dir, dump_configs, \
     dump_bilevel_training_settings
 
 def assemble_param_groups_base(regulariser: FieldsOfExperts, alternating: bool=False):

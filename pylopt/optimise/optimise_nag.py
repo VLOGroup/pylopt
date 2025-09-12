@@ -2,7 +2,7 @@ import torch
 from typing import List, Dict, Any, Callable, Optional, Tuple
 import math
 
-from bilevel_optimisation.data import OptimiserResult
+from pylopt.data import OptimiserResult
 
 MAX_NUM_ITERATIONS_DEFAULT = 1000
 LIP_CONST_KEY = 'lip_const'

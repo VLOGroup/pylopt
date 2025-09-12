@@ -2,7 +2,7 @@ import torch
 from typing import Any, Dict, Optional, Tuple
 from confuse import Configuration
 
-from bilevel_optimisation.potential.Potential import Potential
+from pylopt.potential.Potential import Potential
 from bspline_cuda.functions import QuarticBSplineFunction
 
 EPSILON = 1e-7

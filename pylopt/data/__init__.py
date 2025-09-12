@@ -1,6 +1,6 @@
-from bilevel_optimisation.data.bilevel_types import LowerProblemResult
-from bilevel_optimisation.data.optimiser_types import OptimiserResult
+from pylopt.data.bilevel_types import LowerProblemResult
+from pylopt.data.optimiser_types import OptimiserResult
 
-from bilevel_optimisation.data.linear_solver_types import SolverResult, LinearSolverStats
+from pylopt.data.linear_solver_types import SolverResult, LinearSolverStats
 
 

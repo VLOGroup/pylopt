@@ -34,6 +34,9 @@ classifiers = ['Programming Language :: Python :: 3']
 where = ['.']
 exclude = ['tests*', 'docs*', 'data*', 'data_analysis*', 'images*', 'artefacts*']
 
+[tool.setuptools.package-data]
+pylopt = ['model_data/*.pt', 'config_data/*', 'examples/notebooks/*.ipynb']
+
 [project.urls]
 Documentation = ''
 Repository = ''

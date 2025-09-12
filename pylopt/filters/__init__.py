@@ -1,1 +1,1 @@
-from bilevel_optimisation.filters.ImageFilter import ImageFilter
+from pylopt.filters.ImageFilter import ImageFilter

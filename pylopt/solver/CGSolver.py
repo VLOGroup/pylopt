@@ -2,8 +2,8 @@ import torch
 from typing import Callable
 from typing import Tuple, Dict
 
-from bilevel_optimisation.data import SolverResult, LinearSolverStats
-from bilevel_optimisation.solver.LinearSystemSolver import IterativeLinearSystemSolver
+from pylopt.data import SolverResult, LinearSolverStats
+from pylopt.solver.LinearSystemSolver import IterativeLinearSystemSolver
 
 def scalar_product_l2(x1: torch.Tensor, x2: torch.Tensor) -> torch.Tensor:
     return torch.sum(x1 * x2)

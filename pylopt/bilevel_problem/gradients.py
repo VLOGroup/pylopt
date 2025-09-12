@@ -3,9 +3,9 @@ import torch
 from torch.autograd import Function
 from torch.autograd.function import FunctionCtx
 
-from bilevel_optimisation.energy.Energy import Energy
-from bilevel_optimisation.solver import LinearSystemSolver
-from bilevel_optimisation.lower_problem.solve_lower import solve_lower
+from pylopt.energy.Energy import Energy
+from pylopt.solver import LinearSystemSolver
+from pylopt.lower_problem.solve_lower import solve_lower
 
 def compute_hvp_state(energy: Energy, u: torch.Tensor, v: torch.Tensor) -> torch.Tensor:
     """

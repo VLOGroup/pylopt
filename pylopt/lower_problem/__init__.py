@@ -1,1 +1,1 @@
-from bilevel_optimisation.lower_problem.solve_lower import solve_lower
+from pylopt.lower_problem.solve_lower import solve_lower

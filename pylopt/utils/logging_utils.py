@@ -2,7 +2,7 @@ import os
 import logging
 import torch
 
-from bilevel_optimisation.data.LogLevel import LogLevel
+from pylopt.data.LogLevel import LogLevel
 
 def setup_logger(data_dir_path: str = '.', log_level_str: str = 'info') -> None:
     log_level = LogLevel.from_string(log_level_str)

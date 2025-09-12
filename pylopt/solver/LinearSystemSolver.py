@@ -2,7 +2,7 @@ from abc import ABC, abstractmethod
 from typing import Callable
 import torch
 
-from bilevel_optimisation.data import SolverResult
+from pylopt.data import SolverResult
 
 class IterativeLinearSystemSolver(ABC):
 

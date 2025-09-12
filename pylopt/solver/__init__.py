@@ -1,1 +1,1 @@
-from bilevel_optimisation.solver.CGSolver import CGSolver
+from pylopt.solver.CGSolver import CGSolver

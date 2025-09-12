@@ -15,16 +15,16 @@ import numpy as np
 from confuse import Configuration
 import pandas as pd
 
-from bilevel_optimisation.bilevel_problem.parameter_groups import PARAM_GROUP_NAME_KEY
-from bilevel_optimisation.dataset.dataset_utils import collate_function
-from bilevel_optimisation.dataset.ImageDataset import TestImageDataset
-from bilevel_optimisation.energy import Energy
-from bilevel_optimisation.fields_of_experts import FieldsOfExperts
-from bilevel_optimisation.lower_problem import solve_lower
-from bilevel_optimisation.measurement_model import MeasurementModel
-from bilevel_optimisation.optimise import LIP_CONST_KEY, LR_KEY
-from bilevel_optimisation.utils.evaluation_utils import compute_psnr
-from bilevel_optimisation.utils.Timer import Timer
+from pylopt.bilevel_problem.parameter_groups import PARAM_GROUP_NAME_KEY
+from pylopt.dataset.dataset_utils import collate_function
+from pylopt.dataset.ImageDataset import TestImageDataset
+from pylopt.energy import Energy
+from pylopt.fields_of_experts import FieldsOfExperts
+from pylopt.lower_problem import solve_lower
+from pylopt.measurement_model import MeasurementModel
+from pylopt.optimise import LIP_CONST_KEY, LR_KEY
+from pylopt.utils.evaluation_utils import compute_psnr
+from pylopt.utils.Timer import Timer
 
 def figure_to_tensor(fig: plt.Figure) -> torch.Tensor:
     buf = io.BytesIO()

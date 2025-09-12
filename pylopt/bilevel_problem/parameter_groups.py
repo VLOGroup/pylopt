@@ -1,8 +1,8 @@
 import torch
 from typing import Optional
 
-from bilevel_optimisation.filters import ImageFilter
-from bilevel_optimisation.potential import Potential
+from pylopt.filters import ImageFilter
+from pylopt.potential import Potential
 
 PARAM_GROUP_NAME_KEY = 'name'
 PARAM_GROUP_NAME_DICT = {Potential.__name__: 'potentials', ImageFilter.__name__: 'filters'}

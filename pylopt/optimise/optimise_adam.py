@@ -1,8 +1,8 @@
 import torch
 from typing import Dict, List, Callable, Any
 
-from bilevel_optimisation.data import OptimiserResult
-from bilevel_optimisation.optimise.optimise_nag import flatten_groups, compute_relative_error
+from pylopt.data import OptimiserResult
+from pylopt.optimise.optimise_nag import flatten_groups, compute_relative_error
 
 LR_KEY = 'lr'
 DEFAULTS_GROUP_ADAM = {LR_KEY: 1e-4, 'betas': (0.9, 0.999), 'weight_decay': 0.0, 'eps': 1e-8}

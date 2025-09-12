@@ -3,7 +3,7 @@ from typing import Dict, Any, Optional
 import torch
 from confuse import Configuration
 
-from bilevel_optimisation.potential.Potential import Potential
+from pylopt.potential.Potential import Potential
 
 @Potential.register_subclass('student_t')
 class StudentT(Potential):

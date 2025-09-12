@@ -3,8 +3,8 @@ import torch
 import logging
 import numpy as np
 
-from bilevel_optimisation.fields_of_experts import FieldsOfExperts
-from bilevel_optimisation.utils.Timer import Timer
+from pylopt.fields_of_experts import FieldsOfExperts
+from pylopt.utils.Timer import Timer
 
 def warm_up(regulariser: FieldsOfExperts, x: torch.Tensor, num_calls: int = 100) -> None:
     logging.info('[WARM UP] Perform warm-up forward and backward calls after compilation.')

@@ -3,20 +3,20 @@ from torch.utils.data import DataLoader
 from confuse import Configuration
 import argparse
 
-from bilevel_optimisation.dataset.ImageDataset import TestImageDataset
-from bilevel_optimisation.energy import Energy
-from bilevel_optimisation.fields_of_experts import FieldsOfExperts
-from bilevel_optimisation.filters import ImageFilter
-from bilevel_optimisation.lower_problem import solve_lower
-from bilevel_optimisation.measurement_model import MeasurementModel
-from bilevel_optimisation.potential import StudentT
-from bilevel_optimisation.proximal_maps.ProximalOperator import DenoisingProx
-from bilevel_optimisation.utils.config_utils import load_app_config, parse_datatype
-from bilevel_optimisation.dataset.dataset_utils import collate_function
-from bilevel_optimisation.utils.evaluation_utils import compute_psnr
-from bilevel_optimisation.utils.logging_utils import setup_logger
-from bilevel_optimisation.utils.seeding_utils import seed_random_number_generators
-from bilevel_optimisation.utils.Timer import Timer
+from pylopt.dataset.ImageDataset import TestImageDataset
+from pylopt.energy import Energy
+from pylopt.fields_of_experts import FieldsOfExperts
+from pylopt.filters import ImageFilter
+from pylopt.lower_problem import solve_lower
+from pylopt.measurement_model import MeasurementModel
+from pylopt.potential import StudentT
+from pylopt.proximal_maps.ProximalOperator import DenoisingProx
+from pylopt.utils.config_utils import load_app_config, parse_datatype
+from pylopt.dataset.dataset_utils import collate_function
+from pylopt.utils.evaluation_utils import compute_psnr
+from pylopt.utils.logging_utils import setup_logger
+from pylopt.utils.seeding_utils import seed_random_number_generators
+from pylopt.utils.Timer import Timer
 
 def evaluate_performance(config: Configuration):
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')

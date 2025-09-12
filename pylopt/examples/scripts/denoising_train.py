@@ -4,19 +4,19 @@ import argparse
 import os
 from torch.utils.tensorboard import SummaryWriter
 
-from bilevel_optimisation.bilevel_problem import BilevelOptimisation
-from bilevel_optimisation.callbacks import SaveModel, PlotFiltersAndPotentials, TrainingMonitor
-from bilevel_optimisation.dataset.ImageDataset import TestImageDataset, TrainingImageDataset
-from bilevel_optimisation.fields_of_experts import FieldsOfExperts
-from bilevel_optimisation.filters import ImageFilter
-from bilevel_optimisation.potential import Potential
-from bilevel_optimisation.proximal_maps.ProximalOperator import DenoisingProx
-from bilevel_optimisation.scheduler import (NAGLipConstGuard, CosineAnnealingLRScheduler, AdaptiveLRRestartScheduler,
+from pylopt.bilevel_problem import BilevelOptimisation
+from pylopt.callbacks import SaveModel, PlotFiltersAndPotentials, TrainingMonitor
+from pylopt.dataset.ImageDataset import TestImageDataset, TrainingImageDataset
+from pylopt.fields_of_experts import FieldsOfExperts
+from pylopt.filters import ImageFilter
+from pylopt.potential import Potential
+from pylopt.proximal_maps.ProximalOperator import DenoisingProx
+from pylopt.scheduler import (NAGLipConstGuard, CosineAnnealingLRScheduler, AdaptiveLRRestartScheduler,
                                             restart_condition_loss_based, restart_condition_gradient_based)
-from bilevel_optimisation.utils.logging_utils import setup_logger
-from bilevel_optimisation.utils.seeding_utils import seed_random_number_generators
-from bilevel_optimisation.utils.file_system_utils import create_experiment_dir
-from bilevel_optimisation.utils.config_utils import parse_datatype, load_app_config
+from pylopt.utils.logging_utils import setup_logger
+from pylopt.utils.seeding_utils import seed_random_number_generators
+from pylopt.utils.file_system_utils import create_experiment_dir
+from pylopt.utils.config_utils import parse_datatype, load_app_config
 
 def l2_loss_func(x: torch.Tensor, y: torch.Tensor) -> torch.Tensor:
     return 0.5 * torch.sum((x - y) ** 2)

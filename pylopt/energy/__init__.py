@@ -1,1 +1,1 @@
-from bilevel_optimisation.energy.Energy import Energy
+from pylopt.energy.Energy import Energy

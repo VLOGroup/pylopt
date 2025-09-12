@@ -2,8 +2,8 @@ from abc import ABC, abstractmethod
 from typing import List, Dict, Any, Optional, Callable
 from math import cos, pi
 
-from bilevel_optimisation.bilevel_problem.parameter_groups import PARAM_GROUP_NAME_KEY
-from bilevel_optimisation.optimise import LIP_CONST_KEY
+from pylopt.bilevel_problem.parameter_groups import PARAM_GROUP_NAME_KEY
+from pylopt.optimise import LIP_CONST_KEY
 
 class HyperParamScheduler(ABC):
 

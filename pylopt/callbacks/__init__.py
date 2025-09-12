@@ -1,1 +1,1 @@
-from bilevel_optimisation.callbacks.Callback import Callback, SaveModel, PlotFiltersAndPotentials, TrainingMonitor
+from pylopt.callbacks.Callback import Callback, SaveModel, PlotFiltersAndPotentials, TrainingMonitor
