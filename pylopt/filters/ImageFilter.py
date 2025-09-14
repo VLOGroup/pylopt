@@ -1,6 +1,6 @@
 import os
 import torch
-from typing import Dict, Any, Mapping, NamedTuple
+from typing import Dict, Any, Optional, Self
 from confuse import Configuration
 import numpy as np
 from scipy.fftpack import idct
@@ -49,6 +49,14 @@ class ImageFilter(torch.nn.Module):
     """
     Class modelling quadratic image filters by means of a PyTorch module.
 
+    NOTE
+    ----
+        > Instance of this class can be created by means of constructor, or
+            by means of the class methods
+                * from_file()
+                * from_config()
+            The latter requires as parameter a configuration object from the
+            Python package confuse.
     """
     def __init__(
             self, 
@@ -58,87 +66,81 @@ class ImageFilter(torch.nn.Module):
             initialisation_mode: str='rand', 
             multiplier: float=1.0, 
             trainable: bool=True, 
-            enforce_orthogonality: bool=False,
+            orthogonality_options: Optional[Dict[str, int]]=None,
             normalise: bool=False
     ) -> None:
 
         """
         Initialisation of class ImageFilter.
 
-        :param config: Configuration object. See bilevel_optimisation/config_data for sample configuration files.
+        TODO
+        ----
+            > Introduce backward-hooks for proper handling of projections. Currently these
+                are applied 'manually' in the optimisation routines.
+
+        :param filter_dim: Filter dimension - 7 by default.
+        :param padding: Integer giving the padding which is used when applying filters; 3 by default.
+        :param padding_mode: String indicating the padding mode; 'reflect' by default.
+        :param initialisation_mode: String indicating how filters are initialised: 'rand', 'randn', 'dct'. The latter
+            corresponds to the initialisation of the filters by means of the discrete cosine transform. By default
+            'rand' is used.
+        :param multiplier: Float used as scaling factor in the initialisation process; default value equals 1
+        :param trainable: Flag indicating if filter is trainable or not. True by default.
+        :param orthogonality_options: Dictionary with keys 'enable', 'max_num_iterations'. If orthonalisation
+            is enabled, the procrustes algorithm is used to orthogonalise filters at initialisation stage and
+            after each update step. For this purpose a callable attribute titled ORTHOGONAL_PROJECTION_NAME
+            is created.
+            By default orthogonalisation is not applied. Default number of procrustes iterations equals to 5.
+        :param normalise: Flag indicating if filters are normalised (i.e. each filter has norm 1)
+            within the initialisation procedure. By default normalisation is not applied.
         """
         super().__init__()
 
         self.filter_dim = filter_dim
         self.padding = padding
         self.padding_mode = padding_mode
-        
+        self.orthogonality_options = orthogonality_options if orthogonality_options is not None else {}
 
-        # initialisation with constructor parameters - will be overwritten if from_config, or from_file 
-        # will be called.
+        # initialisation with constructor parameters
         filter_data = self._init_filter_tensor(filter_dim, initialisation_mode, 
-                                               normalise, enforce_orthogonality, multiplier)
+                                               normalise, self.orthogonality_options, multiplier)
         self.filter_tensor = torch.nn.Parameter(data=filter_data, requires_grad=trainable)
-        
-        
-                    # self.filter_dim = config['image_filter']['filter_dim'].get()
-                    # self.padding = self.filter_dim // 2
-                    # self.padding_mode = config['image_filter']['padding_mode'].get()
+        self._bind_projections()
 
-                    # initialisation_mode = config['image_filter']['initialisation']['mode'].get()
-                    # multiplier = config['image_filter']['initialisation']['multiplier'].get()
-                    # normalise = config['image_filter']['initialisation']['normalise'].get()
-                    # trainable = config['image_filter']['trainable'].get()
-                    # enforce_orthogonality = config['image_filter']['enforce_orthogonality'].get()
+    def _bind_projections(self) -> None:
+        """
+        Binding of callable attributes to self.filter_tensor. Orthogonal procrustes projection is
+        not bound by default.
+        """
+        if not hasattr(self.filter_tensor, ZERO_MEAN_PROJECTION_NAME):
+            setattr(self.filter_tensor, ZERO_MEAN_PROJECTION_NAME, zero_mean_projection)
 
-                    # model_path = config['image_filter']['initialisation']['file_path'].get()
-                    # if not model_path:
-                    #     if initialisation_mode == 'dct':
-                    #         can_basis = np.reshape(np.eye(self.filter_dim ** 2, dtype=np.float64),
-                    #                                (self.filter_dim ** 2, self.filter_dim, self.filter_dim))
-                    #         dct_basis = idct(idct(can_basis, axis=1, norm='ortho'), axis=2, norm='ortho')
-                    #         dct_basis = dct_basis[1:].reshape(-1, 1, self.filter_dim, self.filter_dim)
-                    #         filter_data = torch.tensor(dct_basis)
-                    #     elif initialisation_mode == 'randn':
-                    #         filter_data = torch.randn(self.filter_dim ** 2 - 1, 1, self.filter_dim, self.filter_dim)
-                    #     elif initialisation_mode == 'rand':
-                    #         filter_data = 2 * torch.rand(self.filter_dim ** 2 - 1, 1, self.filter_dim, self.filter_dim) - 1
-                    #     else:
-                    #         raise ValueError('Unknown initialisation method.')
-                    #     self.filter_tensor = torch.nn.Parameter(data=filter_data, requires_grad=trainable)
-                    # else:
-                    #     dummy_data = torch.ones(self.filter_dim ** 2 - 1, 1, self.filter_dim, self.filter_dim)
-                    #     self.filter_tensor = torch.nn.Parameter(data=dummy_data, requires_grad=trainable)
-                    #     self._load_from_file(model_path)
+        orthogonalise = self.orthogonality_options.get('enable', False)
+        if orthogonalise:
+            max_num_procrustes_iteations = self.orthogonality_options.get('max_num_iterations', 5)
+            def orthogonal_projection(x: torch.Tensor):
+                return orthogonal_projection_procrustes(x, max_num_iterations=max_num_procrustes_iteations)
 
-                    # with torch.no_grad():
-                    #     self.filter_tensor.copy_(zero_mean_projection(self.filter_tensor))
-                    #     if normalise:
-                    #         self.filter_tensor.divide_(torch.linalg.norm(self.filter_tensor, dim=(-2, -1)).reshape(-1, 1, 1, 1))
-                    #     self.filter_tensor.mul_(multiplier)
+            setattr(self.filter_tensor, ORTHOGONAL_PROJECTION_NAME, orthogonal_projection)
 
-        GO ON HERE:
-            > define projections in function!
-
-        # # define projections
-        # if not hasattr(self.filter_tensor, 'zero_mean_projection'):
-        #     setattr(self.filter_tensor, 'zero_mean_projection', zero_mean_projection)
-        # if enforce_orthogonality:
-        #     max_num_iterations = 5
-        #     def orthogonal_projection(x: torch.Tensor):
-        #         return orthogonal_projection_procrustes(x, max_num_iterations=max_num_iterations)
-        #     setattr(self.filter_tensor, 'orthogonal_projection', orthogonal_projection)
-
-    def _init_projections():
-        pass
-
+    @staticmethod
     def _init_filter_tensor(
             filter_dim: int, 
             initialisation_mode: str,
             normalise: bool,
-            orthogonalise: bool, 
-            multiplier: bool
+            orthogonality_options: Dict[str, Any],
+            multiplier: float
     ) -> torch.Tensor:
+        """
+        Utiliy method for the initialisation of the parameter filter_tensor.
+
+        :param filter_dim:
+        :param initialisation_mode:
+        :param normalise:
+        :param orthogonality_options:
+        :param multiplier:
+        :return: PyTorch tensor of shape [num_filters, 1, filter_dim, filter_dim]
+        """
         if initialisation_mode == 'dct':
             can_basis = np.reshape(np.eye(filter_dim ** 2, dtype=np.float64),
                                     (filter_dim ** 2, filter_dim, filter_dim))
@@ -152,8 +154,10 @@ class ImageFilter(torch.nn.Module):
         else:
             raise ValueError('Unknown initialisation method.')
 
+        orthogonalise = orthogonality_options.get('enable', False)
         if orthogonalise:
-            orthogonal_projection_procrustes(filter_data, max_num_iterations=5)
+            max_num_procrustes_iteations = orthogonality_options.get('max_num_iterations', 5)
+            orthogonal_projection_procrustes(filter_data, max_num_iterations=max_num_procrustes_iteations)
         if normalise:
             filter_data.divide_(torch.linalg.norm(filter_data, dim=(-2, -1)).reshape(-1, 1, 1, 1))
         filter_data = zero_mean_projection(filter_data)
@@ -161,44 +165,56 @@ class ImageFilter(torch.nn.Module):
 
         return filter_data
 
-    def from_config(self, config: Configuration):
-        self.filter_dim = config['image_filter']['filter_dim'].get()
-        self.padding = self.filter_dim // 2
-        self.padding_mode = config['image_filter']['padding_mode'].get()
+    @classmethod
+    def from_config(cls, config: Configuration) -> Self:
+        """
+        Class method for initialisation from config.
 
-        initialisation_mode = config['image_filter']['initialisation']['mode'].get()
-        multiplier = config['image_filter']['initialisation']['multiplier'].get()
-        normalise = config['image_filter']['initialisation']['normalise'].get()
+        :param config: Configuration object from Python package confuse.
+        :return: Instance of class ImageFilter
+        """
+        filter_dim = config['image_filter']['filter_dim'].get()
+        padding = config['image_filter']['padding'].get()
+        padding_mode = config['image_filter']['padding_mode'].get()
+
+        initialisation_mode = config['image_filter']['initialisation_mode'].get()
+        multiplier = config['image_filter']['multiplier'].get()
+        normalise = config['image_filter']['normalise'].get()
         trainable = config['image_filter']['trainable'].get()
-        enforce_orthogonality = config['image_filter']['enforce_orthogonality'].get()
 
-        model_path = config['image_filter']['initialisation']['file_path'].get()
-        if not model_path:
-            filter_data = self._init_filter_tensor(self.filter_dim, initialisation_mode, normalise, 
-                                                   enforce_orthogonality, multiplier)
-        else:
-            self._load_from_file(model_path)
+        orthogonality_options = {
+            'enable': config['image_filter']['orthogonality']['enable'].get(),
+            'max_num_iterations': config['image_filter']['orthogonality']['max_num_iterations'].get()
+        }
 
-        with torch.no_grad():
-            self.filter_tensor = torch.nn.Parameter(data=filter_data, requires_grad=trainable)
+        return cls(filter_dim, padding, padding_mode, initialisation_mode, multiplier, trainable,
+                   orthogonality_options, normalise)
 
+    @classmethod
+    def from_file(cls, path_to_model: str, device: torch.device=torch.device('cpu')) -> Self:
+        """
+        Class method for initialisation from file.
 
-
-    def load_state_dict(self, state_dict: Mapping[str, Any], *args, **kwargs) -> NamedTuple:
-        result = torch.nn.Module.load_state_dict(self, state_dict, strict=True)
-        return result
-
-    def from_file(self, path_to_model: str, device: torch.device=torch.device('cpu')) -> None:
+        :param path_to_model: String representing the path to the model file.
+        :param device: Location where loaded model should be placed; by default model is placed on cpu.
+        :return: Instance of class ImageFilter
+        """
         filter_data = torch.load(path_to_model, map_location=device)
 
         initialisation_dict = filter_data['initialisation_dict']
-        filter_dim = initialisation_dict['filter_dim']
-        padding_mode = initialisation_dict['padding_mode']
-        self.filter_dim = filter_dim
-        self.padding_mode = padding_mode
-
         state_dict = filter_data['state_dict']
-        self.load_state_dict(state_dict)
+
+        filter_dim = initialisation_dict.get('filter_dim', 7)
+        padding = initialisation_dict.get('padding', 3)
+        padding_mode = initialisation_dict.get('padding_mode', 'reflect')
+        orthogonality_options = initialisation_dict.get('orthogonality_options', {})
+
+        image_filter = cls(filter_dim=filter_dim,
+                           padding=padding,
+                           padding_mode=padding_mode,
+                           orthogonality_options=orthogonality_options)
+        image_filter.load_state_dict(state_dict, strict=True)
+        return image_filter
 
     def get_filter_tensor(self) -> torch.Tensor:
         return self.filter_tensor.data
@@ -216,14 +232,15 @@ class ImageFilter(torch.nn.Module):
         return state
 
     def initialisation_dict(self)  -> Dict[str, Any]:
-        return {'filter_dim': self.filter_dim, 'padding_mode': self.padding_mode}
-
-
+        return {'filter_dim': self.filter_dim,
+                'padding': self.padding,
+                'padding_mode': self.padding_mode,
+                'orthogonality_options': self.orthogonality_options}
 
     def save(self, path_to_model_dir: str, model_name: str='filters') -> str:
         path_to_model = os.path.join(path_to_model_dir, '{:s}.pt'.format(os.path.splitext(model_name)[0]))
-        potential_dict = {'initialisation_dict': self.initialisation_dict(),
-                          'state_dict': self.state_dict()}
+        filter_data_dict = {'initialisation_dict': self.initialisation_dict(),
+                            'state_dict': self.state_dict()}
 
-        torch.save(potential_dict, path_to_model)
+        torch.save(filter_data_dict, path_to_model)
         return path_to_model

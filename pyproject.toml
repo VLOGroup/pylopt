@@ -4,17 +4,17 @@ build-backend = 'setuptools.build_meta'
 
 [project]
 name = 'PyLOpt'
-version = attr: bilevel_optimisation.__version__
+version = '0.1.0'
 dependencies = [
-    torch>=2.6.0
-    numpy>=2.0.2
-    confuse>=2.0.1
-    scipy>=1.15.2
-    opencv-python-headless>=4.11.0.86
-    matplotlib>=3.10.1
-    PyQt5>=5.15.11
-    torchvision>=0.21.0
-    pillow>=11.1.0
+    'torch>=2.6.0',
+    'numpy>=2.0.2',
+    'confuse>=2.0.1',
+    'scipy>=1.15.2',
+    'opencv-python-headless>=4.11.0.86',
+    'matplotlib>=3.10.1',
+    'PyQt5>=5.15.11',
+    'torchvision>=0.21.0',
+    'pillow>=11.1.0'
 ]
 requires-python = ">=3.11"
 authors = [

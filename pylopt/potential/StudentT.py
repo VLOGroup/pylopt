@@ -1,5 +1,5 @@
 import os.path
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, Self
 import torch
 from confuse import Configuration
 
@@ -11,28 +11,47 @@ class StudentT(Potential):
     Class implementing student-t potential for the usage in context of FoE models.
     """
 
-    def __init__(self, num_marginals: int, config: Configuration) -> None:
+    def __init__(
+            self,
+            num_marginals: int=48,
+            initialisation_mode: str='uniform',
+            multiplier: float=1.0,
+            trainable: bool=True
+    ) -> None:
         super().__init__(num_marginals)
 
-        initialisation_mode = config['potential']['student_t']['initialisation']['mode'].get()
-        multiplier = config['potential']['student_t']['initialisation']['multiplier'].get()
-        trainable = config['potential']['student_t']['trainable'].get()
+        weight_data = self._init_weight_tensor(num_marginals, initialisation_mode, multiplier)
+        self.weight_tensor = torch.nn.Parameter(data=weight_data, requires_grad=trainable)
 
-        model_path = config['potential']['student_t']['initialisation']['file_path'].get()
-        if not model_path:
-            if initialisation_mode == 'rand':
-                weights = torch.log(multiplier * torch.rand(num_marginals))
-            elif initialisation_mode == 'uniform':
-                weights = torch.log(multiplier * torch.ones(num_marginals))
-            else:
-                raise ValueError('Unknown initialisation method')
-            self.weight_tensor = torch.nn.Parameter(data=weights, requires_grad=trainable)
+        # initialisation_mode = config['potential']['student_t']['initialisation']['mode'].get()
+        # multiplier = config['potential']['student_t']['initialisation']['multiplier'].get()
+        # trainable = config['potential']['student_t']['trainable'].get()
+        #
+        # model_path = config['potential']['student_t']['initialisation']['file_path'].get()
+        # if not model_path:
+        #     if initialisation_mode == 'rand':
+        #         weights = torch.log(multiplier * torch.rand(num_marginals))
+        #     elif initialisation_mode == 'uniform':
+        #         weights = torch.log(multiplier * torch.ones(num_marginals))
+        #     else:
+        #         raise ValueError('Unknown initialisation method')
+        #
+        # else:
+        #     dummy_data = torch.ones(num_marginals)
+        #     self.weight_tensor = torch.nn.Parameter(data=dummy_data, requires_grad=trainable)
+        #     self._load_from_file(model_path)
+        #     with torch.no_grad():
+        #         self.weight_tensor.add_(torch.log(torch.tensor(multiplier)))
+
+    @staticmethod
+    def _init_weight_tensor(num_marginals: int, initialisation_mode: str, multiplier: float) -> torch.Tensor:
+        if initialisation_mode == 'rand':
+            weight_data = torch.log(multiplier * torch.rand(num_marginals))
+        elif initialisation_mode == 'uniform':
+            weights_data = torch.log(multiplier * torch.ones(num_marginals))
         else:
-            dummy_data = torch.ones(num_marginals)
-            self.weight_tensor = torch.nn.Parameter(data=dummy_data, requires_grad=trainable)
-            self._load_from_file(model_path)
-            with torch.no_grad():
-                self.weight_tensor.add_(torch.log(torch.tensor(multiplier)))
+            raise ValueError('Unknown initialisation method')
+        return weight_data
 
     def get_parameters(self) -> torch.Tensor:
         return self.weight_tensor.data
@@ -46,14 +65,33 @@ class StudentT(Potential):
     def initialisation_dict(self) -> Dict[str, Any]:
         return {'num_marginals': self.num_marginals}
 
-    def _load_from_file(self, path_to_model: str, device: torch.device=torch.device('cpu')) -> None:
+    @classmethod
+    def from_file(cls, path_to_model: str, device: torch.device=torch.device('cpu')) -> Self:
         potential_data = torch.load(path_to_model, map_location=device)
 
         initialisation_dict = potential_data['initialisation_dict']
-        self.num_marginals = initialisation_dict['num_marginals']
-
         state_dict = potential_data['state_dict']
-        self.load_state_dict(state_dict)
+
+        num_marginals = initialisation_dict.get(['num_marginals'], 48)
+        potential = cls(num_marginals=num_marginals)
+
+        potential.load_state_dict(state_dict, strict=True)
+        return potential
+
+    @classmethod
+    def from_config(cls, config: Configuration, **kwargs) -> Self:
+
+        GO ON HERE!
+
+
+    # def _load_from_file(self, path_to_model: str, device: torch.device=torch.device('cpu')) -> None:
+    #     potential_data = torch.load(path_to_model, map_location=device)
+    #
+    #     initialisation_dict = potential_data['initialisation_dict']
+    #     self.num_marginals = initialisation_dict['num_marginals']
+    #
+    #     state_dict = potential_data['state_dict']
+    #     self.load_state_dict(state_dict)
 
     def save(self, path_to_model_dir: str, model_name: str='student_t') -> str:
         path_to_model = os.path.join(path_to_model_dir, '{:s}.pt'.format(os.path.splitext(model_name)[0]))

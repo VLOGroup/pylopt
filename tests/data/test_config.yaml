@@ -1,0 +1,11 @@
+image_filter:
+  filter_dim: 7
+  padding: 3
+  padding_mode: 'reflect'
+  initialisation_mode: 'rand'
+  multiplier: 1.0
+  normalise: True
+  trainable: False
+  orthogonality:
+    enable: True
+    max_num_iterations: 4

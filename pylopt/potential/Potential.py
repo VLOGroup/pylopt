@@ -33,20 +33,28 @@ class Potential(ABC, torch.nn.Module):
         result = torch.nn.Module.load_state_dict(self, state_dict, strict=True)
         return result
 
-    @classmethod
-    def register_subclass(cls, sub_class_id: str) -> Callable:
-        def decorator(subclass: Type[cls.__name__]) -> Type[cls.__name__]:
-            cls.registry[sub_class_id] = subclass
-            return subclass
-        return decorator
+                # @classmethod
+                # def register_subclass(cls, sub_class_id: str) -> Callable:
+                #     def decorator(subclass: Type[cls.__name__]) -> Type[cls.__name__]:
+                #         cls.registry[sub_class_id] = subclass
+                #         return subclass
+                #     return decorator
 
     @classmethod
+    @abstractmethod
+    def from_file(cls, path_to_model: str, device: torch.device=torch.device('cpu')):
+        pass
+
+
+    @classmethod
+    @abstractmethod
     def from_config(cls, num_marginals: int, config: Configuration, **kwargs) -> Self:
-        potential_type = list(config['potential'].get().keys())[-1]
-        subclass = cls.registry.get(potential_type, None)
-        if subclass is None:
-            raise ValueError('Unable to load potential – unknown class type.')
-        return subclass(num_marginals=num_marginals, config=config, **kwargs)
+        # potential_type = list(config['potential'].get().keys())[-1]
+        # subclass = cls.registry.get(potential_type, None)
+        # if subclass is None:
+        #     raise ValueError('Unable to load potential – unknown class type.')
+        # return subclass(num_marginals=num_marginals, config=config, **kwargs)
+        pass
 
     @abstractmethod
     def initialisation_dict(self)  -> Dict[str, Any]:
@@ -59,34 +67,6 @@ class Potential(ABC, torch.nn.Module):
     @abstractmethod
     def forward_negative_log(self, x: torch.Tensor, reduce: bool=True) -> torch.Tensor:
         pass
-
-            # @abstractmethod
-            # def first_derivative(self, x: torch.Tensor, grad_outputs: Optional[torch.Tensor]=None) -> torch.Tensor:
-            #     """
-            #     This function is intended to implement analytical derivatives whenever possible and suitable,
-            #     as is the case with splines.
-            #
-            #     :param x: PyTorch tensor representing the point at which derivative shall be computed.
-            #     :param grad_outputs: PyTorch tensor representing the vector the derivative is applied to.
-            #     :return: PyTorch tensor corresponding to the derivative of the potential function at x, applied
-            #         to grad_outputs.
-            #     """
-            #     pass
-            #
-            # @abstractmethod
-            # def second_derivative(self, x: torch.Tensor, grad_outputs: Optional[torch.Tensor]=None,
-            #                       mixed: bool=True) -> torch.Tensor:
-            #     """
-            #     As for the function first_derivative().
-            #
-            #     :param x: PyTorch tensor corresponding to the point at which derivative shall be computed.
-            #     :param grad_outputs: PyTorch tensor of the vector at which the derivative shall be appliled.
-            #     :param mixed: Flag indicating if mixed derivative needs to be computed. By default, the derivative
-            #         is computed w.r.t. the state variable x.
-            #     :return: Derivative of potential function at x, applied to grad_outputs in terms of a PyTorch tensor.
-            #     """
-            #     pass
-
 
     @abstractmethod
     def _load_from_file(self, path_to_model: str, device: torch.device=torch.device('cpu')) -> None:

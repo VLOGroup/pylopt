@@ -5,7 +5,7 @@ import torch
 import logging
 from importlib import resources
 
-DEFAULT_CONFIG_DIR_PATH = os.path.join(resources.files('bilevel_optimisation'), 'config_data', 'default')
+DEFAULT_CONFIG_DIR_PATH = os.path.join(resources.files('pylopt'), 'config_data', 'default')
 TYPE_DICT = {'float16': torch.float16, 'float32': torch.float32, 'float64': torch.float64}
 
 def locate_custom_config_in_package(subdir_name: str) -> Optional[str]:

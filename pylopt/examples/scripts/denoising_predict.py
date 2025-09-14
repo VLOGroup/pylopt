@@ -61,7 +61,9 @@ def denoise(config: Configuration):
     test_loader = DataLoader(test_image_dataset, batch_size=len(test_image_dataset), shuffle=False,
                              collate_fn=lambda x: collate_function(x, crop_size=-1))
 
-    image_filter = ImageFilter(config)
+
+
+    image_filter = ImageFilter.load_from_file()
     potential = Potential.from_config(image_filter.get_num_filters(), config)
     regulariser = FieldsOfExperts(potential, image_filter)
 
