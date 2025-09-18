@@ -1,5 +1,5 @@
 import torch
-from typing import Any, Dict, Optional, Tuple
+from typing import Any, Dict, Optional, Tuple, Self
 from confuse import Configuration
 
 from pylopt.potential.Potential import Potential
@@ -7,7 +7,6 @@ from bspline_cuda.functions import QuarticBSplineFunction
 
 EPSILON = 1e-7
 
-@Potential.register_subclass('spline')
 class QuarticBSpline(Potential):
 
     def __init__(self, num_marginals: int, config: Configuration) -> None:
@@ -40,23 +39,28 @@ class QuarticBSpline(Potential):
             # TODO: implement me!
             pass
 
-
-
     def initialisation_dict(self) -> Dict[str, Any]:
         raise NotImplementedError
 
     def get_parameters(self) -> torch.Tensor:
         return self.weight_tensor.data
 
-    def forward_negative_log(self, x: torch.Tensor, reduce: bool = True) -> torch.Tensor:
+    def forward(self, x: torch.Tensor, reduce: bool = True) -> torch.Tensor:
         y, _ = QuarticBSplineFunction.apply(x, torch.exp(self.weight_tensor), self.centers, self.scale)
         if reduce:
             return torch.sum(y)
         else:
             return y
 
-    def _load_from_file(self, path_to_model: str, device: torch.device = ...) -> None:
-        raise NotImplementedError
+    @classmethod
+    def from_file(cls, path_to_model: str, device: torch.device=torch.device('cpu')):
+        pass
+
+    @classmethod
+    def from_config(cls, config: Configuration) -> Self:
+
+    # def _load_from_file(self, path_to_model: str, device: torch.device = ...) -> None:
+    #     raise NotImplementedError
 
             
                     #         super().__init__(num_marginals)
@@ -256,7 +260,7 @@ class QuarticBSpline(Potential):
                     #     def get_parameters(self) -> torch.Tensor:
                     #         return self.nodal_values.data
 
-                    #     def forward_negative_log(self, x: torch.Tensor, reduce: bool=True) -> torch.Tensor:
+                    #     def forward(self, x: torch.Tensor, reduce: bool=True) -> torch.Tensor:
                     #         # if self.recompute_coefficients:
                     #         #     self._fit()
                     #         #     self.recompute_coefficients = False

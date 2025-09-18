@@ -177,9 +177,9 @@ class ImageFilter(torch.nn.Module):
         padding = config['image_filter']['padding'].get()
         padding_mode = config['image_filter']['padding_mode'].get()
 
-        initialisation_mode = config['image_filter']['initialisation_mode'].get()
-        multiplier = config['image_filter']['multiplier'].get()
-        normalise = config['image_filter']['normalise'].get()
+        initialisation_mode = config['image_filter']['initialisation']['mode'].get()
+        multiplier = config['image_filter']['initialisation']['multiplier'].get()
+        normalise = config['image_filter']['initialisation']['normalise'].get()
         trainable = config['image_filter']['trainable'].get()
 
         orthogonality_options = {

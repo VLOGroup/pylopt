@@ -194,7 +194,7 @@ class PlotFiltersAndPotentials(Callback):
             t = torch.stack([torch.linspace(quantiles[0, i], quantiles[1, i], 111)
                              for i in range(0, num_marginals)]).unsqueeze(dim=1).unsqueeze(dim=0)
             t = t.to(device=device, dtype=dtype)
-            rho = potential.forward_negative_log(t, reduce=False)
+            rho = potential.forward(t, reduce=False)
 
             fig, axes = plt.subplots(num_marginals_sqrt, num_marginals_sqrt, figsize=(13, 13),
                                      gridspec_kw={'hspace': 0.9, 'wspace': 0.4}, sharex=False, sharey=False)

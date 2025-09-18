@@ -30,5 +30,5 @@ class FieldsOfExperts(torch.nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         x_conv = self.image_filter(x)
-        return self.potential.forward_negative_log(x_conv)
+        return self.potential.forward(x_conv)
 

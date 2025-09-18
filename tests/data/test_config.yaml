@@ -2,10 +2,19 @@ image_filter:
   filter_dim: 7
   padding: 3
   padding_mode: 'reflect'
-  initialisation_mode: 'rand'
-  multiplier: 1.0
-  normalise: True
+  initialisation:
+    mode: 'rand'
+    multiplier: 1.0
+    normalise: True
   trainable: False
   orthogonality:
     enable: True
     max_num_iterations: 4
+
+potential:
+  student_t:
+    num_marginals: 48
+    initialisation:
+      mode: 'rand'
+      multiplier: 1.0
+    trainable: False
