@@ -52,7 +52,6 @@ class StudentT(Potential):
 
         num_marginals = initialisation_dict.get('num_marginals', 48)
         potential = cls(num_marginals=num_marginals)
-
         potential.load_state_dict(state_dict, strict=True)
         return potential
 

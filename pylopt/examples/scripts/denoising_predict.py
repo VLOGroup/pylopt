@@ -4,6 +4,7 @@ import torch
 from torch.utils.data import DataLoader
 from confuse import Configuration
 import argparse
+import os
 
 from pylopt.dataset.ImageDataset import TestImageDataset
 from pylopt.energy import Energy
@@ -11,7 +12,7 @@ from pylopt.fields_of_experts import FieldsOfExperts
 from pylopt.filters import ImageFilter
 from pylopt.lower_problem import solve_lower
 from pylopt.measurement_model import MeasurementModel
-from pylopt.potential import Potential
+from pylopt.potential import StudentT, QuarticBSpline
 from pylopt.proximal_maps.ProximalOperator import DenoisingProx
 from pylopt.utils.config_utils import load_app_config, parse_datatype
 from pylopt.dataset.dataset_utils import collate_function
@@ -19,6 +20,10 @@ from pylopt.utils.evaluation_utils import compute_psnr
 from pylopt.utils.logging_utils import setup_logger
 from pylopt.utils.seeding_utils import seed_random_number_generators
 from pylopt.utils.Timer import Timer
+
+PRETRAINED_FILTER_MODELS = {'chen-ranftl-pock_2014_scaled_7x7': 'pylopt/model_data/foe_filters_7x7_chen-ranftl-pock_2014_scaled.pt', 
+                         'thaler-pock_7x7': ''}
+PRETRAINED_POTENTIAL_MODELS = {}
 
 def visualise_denoising_results(u_clean: torch.Tensor, u_noisy: torch.Tensor, u_denoised: torch.Tensor) -> None:
     u_clean_splits = torch.split(u_clean, split_size_or_sections=1, dim=0)
@@ -61,10 +66,9 @@ def denoise(config: Configuration):
     test_loader = DataLoader(test_image_dataset, batch_size=len(test_image_dataset), shuffle=False,
                              collate_fn=lambda x: collate_function(x, crop_size=-1))
 
-
-
-    image_filter = ImageFilter.load_from_file()
-    potential = Potential.from_config(image_filter.get_num_filters(), config)
+    image_filter = ImageFilter.from_file(os.path.join(os.getcwd(), EXAMPLE_FILTER_MODELS['chen-ranftl-pock_2014_scaled_7x7']))
+    # potential = Potential.from_config(image_filter.get_num_filters(), config)
+    potential = QuarticBSpline.from_file(os.path.join(os.getcwd(), EXAMPLE_FILTER_MODELS['chen-ranftl-pock_2014_scaled_7x7']))
     regulariser = FieldsOfExperts(potential, image_filter)
 
     u_clean = list(test_loader)[0]

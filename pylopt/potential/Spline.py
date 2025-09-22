@@ -3,44 +3,49 @@ from typing import Any, Dict, Optional, Tuple, Self
 from confuse import Configuration
 
 from pylopt.potential.Potential import Potential
-from bspline_cuda.functions import QuarticBSplineFunction
+from quartic_bspline_extension.functions import QuarticBSplineFunction
 
 EPSILON = 1e-7
 
 class QuarticBSpline(Potential):
 
-    def __init__(self, num_marginals: int, config: Configuration) -> None:
+    def __init__(self, 
+                 num_marginals: int,
+                 box_lower: float=-1.0,
+                 box_upper: float=1.0,
+                 num_centers: int=87,
+                 initialisation_mode: str='student_t', 
+                 multiplier: float=1.0,
+                 trainable: bool=True) -> None:
         super().__init__(num_marginals)
-        initialisation_mode = config['potential']['spline']['initialisation']['mode'].get()
-        multiplier = config['potential']['spline']['initialisation']['multiplier'].get()
-        trainable = config['potential']['spline']['trainable'].get()
 
-        model_path = config['potential']['spline']['initialisation']['file_path'].get()
-        if not model_path:
+        self.box_lower = box_lower
+        self.box_upper = box_upper
+        self.num_centers = num_centers
+        self.scale = (self.box_upper - self.box_lower) / (self.num_centers - 1)
+        self.register_buffer('centers', torch.linspace(self.box_lower, self.box_upper, self.num_centers))
 
-            self.box_lower = config['potential']['spline']['box_lower'].get()
-            self.box_upper = config['potential']['spline']['box_upper'].get()
-            self.num_centers = config['potential']['spline']['num_centers'].get()
-            self.scale = (self.box_upper - self.box_lower) / (self.num_centers - 1)
+        weight_data = self._init_weight_tensor(num_marginals, self.centers, initialisation_mode, multiplier)
+        self.weight_tensor = torch.nn.Parameter(data=weight_data, requires_grad=trainable)
 
-            self.register_buffer('centers', torch.linspace(self.box_lower, self.box_upper, self.num_centers))
-
-            if initialisation_mode == 'rand':
-                weights = torch.log(multiplier * torch.rand(num_marginals, self.num_centers))
-            elif initialisation_mode == 'uniform':
-                weights = torch.log(multiplier * torch.ones(num_marginals, self.num_centers))
-            elif initialisation_mode == 'student_t':
-                weights = torch.log(multiplier * torch.log(1 + torch.stack([self.centers 
-                                                                  for _ in range(0, num_marginals)], dim=0) ** 2))
-            else:
-                raise ValueError('Unknown initialisation method for potential {:s}'.format(self.__class__.__name__))
-            self.weight_tensor = torch.nn.Parameter(data=weights, requires_grad=trainable)
+    @staticmethod
+    def _init_weight_tensor(num_marginals: int, centers: torch.Tensor, initialisation_mode: str, multiplier: float) -> torch.Tensor:
+        if initialisation_mode == 'rand':
+            weight_data = torch.log(multiplier * torch.rand(num_marginals, len(centers)))
+        elif initialisation_mode == 'uniform':
+            weight_data = torch.log(multiplier * torch.ones(num_marginals, len(centers)))
+        elif initialisation_mode == 'student_t':
+            weight_data = torch.log(multiplier * torch.log(1 + torch.stack([centers 
+                                                                for _ in range(0, num_marginals)], dim=0) ** 2))
         else:
-            # TODO: implement me!
-            pass
-
+            raise ValueError('Unknown initialisation method')
+        return weight_data
+        
     def initialisation_dict(self) -> Dict[str, Any]:
-        raise NotImplementedError
+        return {'num_marginals': self.num_marginals, 
+                'box_lower': self.box_lower,
+                'box_upper': self.box_upper,
+                'num_centers': self.num_centers}
 
     def get_parameters(self) -> torch.Tensor:
         return self.weight_tensor.data
@@ -53,54 +58,37 @@ class QuarticBSpline(Potential):
             return y
 
     @classmethod
-    def from_file(cls, path_to_model: str, device: torch.device=torch.device('cpu')):
-        pass
+    def from_file(cls, path_to_model: str, device: torch.device=torch.device('cpu')) -> Self:
+        potential_data = torch.load(path_to_model, map_location=device)
+
+        initialisation_dict = potential_data['initialisation_dict']
+        state_dict = potential_data['state_dict']
+
+        num_marginals = initialisation_dict.get('num_marginals', 48)
+        box_lower = initialisation_dict.get('box_lower', -1.0)
+        box_upper = initialisation_dict.get('box_upper', 1.0)
+        num_centers = initialisation_dict.get('num_centers', 87)
+        potential = cls(num_marginals=num_marginals, box_lower=box_lower, box_upper=box_upper, num_centers=num_centers)
+        potential.load_state_dict(state_dict, strict=True)
+        return potential
 
     @classmethod
     def from_config(cls, config: Configuration) -> Self:
-
-    # def _load_from_file(self, path_to_model: str, device: torch.device = ...) -> None:
-    #     raise NotImplementedError
-
-            
-                    #         super().__init__(num_marginals)
-
-                    #         initialisation_mode = config['potential']['spline']['initialisation']['mode'].get()
-                    #         multiplier = config['potential']['spline']['initialisation']['multiplier'].get()
-                    #         trainable = config['potential']['spline']['trainable'].get()
-
-                    #         model_path = config['potential']['spline']['initialisation']['file_path'].get()
-                    #         if not model_path:
-                    #             self.num_nodes = config['potential']['spline']['num_nodes'].get()
-                    #             self.box_lower = config['potential']['spline']['box_lower'].get()
-                    #             self.box_upper = config['potential']['spline']['box_upper'].get()
-
-                    #             self.register_buffer('nodes', torch.linspace(self.box_lower, self.box_upper, self.num_nodes))
-                    #             self.register_buffer('coeffs_1st_order', torch.zeros(self.num_marginals, self.num_nodes - 1))
-                    #             self.register_buffer('coeffs_2nd_order', torch.zeros(self.num_marginals, self.num_nodes - 1))
-                    #             self.register_buffer('coeffs_3rd_order', torch.zeros(self.num_marginals, self.num_nodes - 1))
-
-                    #             if initialisation_mode == 'rand':
-                    #                 nodal_vals = min(multiplier, 1.0) * torch.rand(num_marginals, self.num_nodes)
-                    #             elif initialisation_mode == 'uniform':
-                    #                 nodal_vals = min(multiplier, 1.0 - EPSILON) * torch.ones(num_marginals, self.num_nodes)
-                    #             elif initialisation_mode == 'student_t':
-                    #                 nodal_vals = multiplier * torch.log(1 + torch.stack([self.nodes
-                    #                                                                      for _ in range(0, num_marginals)], dim=0) ** 2)
-                    #             else:
-                    #                 raise ValueError('Unknown initialisation method')
-                    #             self.nodal_values = torch.nn.Parameter(data=nodal_vals, requires_grad=trainable)
-                    #         else:
-                    #             # TODO: implement me!
-                    #             pass
-
-
-
-    
-
-
-
-
+        num_marginals = config['potential']['quartic_bspline']['num_marginals'].get()
+        box_lower = config['potential']['quartic_bspline']['box_lower'].get()
+        box_upper = config['potential']['quartic_bspline']['box_upper'].get()
+        num_centers = config['potential']['quartic_bspline']['num_centers'].get()
+        initialisation_mode = config['potential']['quartic_bspline']['initialisation']['mode'].get()
+        multiplier = config['potential']['quartic_bspline']['initialisation']['multiplier'].get()
+        trainable = config['potential']['quartic_bspline']['trainable'].get()
+        
+        return cls(num_marginals=num_marginals, 
+                   box_lower=box_lower, 
+                   box_upper=box_upper, 
+                   num_centers=num_centers,
+                   initialisation_mode=initialisation_mode,
+                   multiplier=multiplier,
+                   trainable=trainable)
 
 # ### NATURAL CUBIC SPLINE
 

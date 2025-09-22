@@ -16,7 +16,6 @@ dependencies = [
     'torchvision>=0.21.0',
     'pillow>=11.1.0'
 ]
-requires-python = ">=3.11"
 authors = [
     {name = 'Florian Thaler', email = 'florian.thaler@tugraz.at'},
     {name = 'Thomas Pock'}

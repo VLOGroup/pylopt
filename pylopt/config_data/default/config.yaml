@@ -14,29 +14,31 @@ data:
 
 image_filter:
   filter_dim: 7
+  padding: 3
   padding_mode: 'reflect'
-  enforce_orthogonality: False
+  orthogonality:
+    enable: False
+    max_num_iterations: 3
   initialisation:
     mode: 'dct'
-    file_path: ''
     multiplier: 1.0
     normalise: False
   trainable: False
 
 potential:
   student_t:
+    num_marginals: 48
     initialisation:
       mode: 'uniform'
-      file_path: ''
       multiplier: 1.0
     trainable: False
-  spline:
-    num_nodes: 9           # Does not need to be specified, if model is loaded from file
-    box_lower: -3           # Does not need to be specified, if model is loaded from file
-    box_upper: 3            # Does not need to be specified, if model is loaded from file
+  quartic_bspline:
+    num_marginals: 48
+    num_centers: 9
+    box_lower: -3
+    box_upper: 3
     initialisation:
       mode: 'student_t'
-      file_path: ''
       multiplier: 1.0
     trainable: False
 
