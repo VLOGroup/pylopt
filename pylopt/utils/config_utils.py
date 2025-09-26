@@ -9,7 +9,7 @@ DEFAULT_CONFIG_DIR_PATH = os.path.join(resources.files('pylopt'), 'config_data',
 TYPE_DICT = {'float16': torch.float16, 'float32': torch.float32, 'float64': torch.float64}
 
 def locate_custom_config_in_package(subdir_name: str) -> Optional[str]:
-    package_root = resources.files('bilevel_optimisation')
+    package_root = resources.files('pylopt')
     custom_config_dir = os.path.join(package_root, 'config_data', 'custom')
     custom_config_subdir_list = [d for d in os.listdir(custom_config_dir)
                                  if os.path.isdir(os.path.join(custom_config_dir, d))]

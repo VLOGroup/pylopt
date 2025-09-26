@@ -3,7 +3,7 @@ from typing import Optional, List, Dict, Any, Tuple, Callable
 
 from pylopt.data import LowerProblemResult, OptimiserResult
 from pylopt.energy import Energy
-from pylopt.measurement_model import MeasurementModel
+from pylopt.energy import MeasurementModel
 from pylopt.optimise import optimise_nag, optimise_adam, optimise_nag_unrolling, LIP_CONST_KEY
 
 def make_prox_map(prox_operator: torch.nn.Module, u: torch.Tensor) -> Callable:
@@ -61,7 +61,7 @@ def build_solution_tensor_from_param_groups(param_groups: List[Dict[str, Any]]):
     solution_list = [group['params'][-1] for group in param_groups]
     return torch.cat(solution_list, dim=0)
 
-def build_objective_func(energy: Energy, batch_optim: bool, use_prox: bool) -> Callable:
+def build_objective_func(energy: Energy, batch_optim: bool, use_prox: bool, resample_measurement_noise: bool) -> Callable:
     if batch_optim and not use_prox:
         def func(x: torch.Tensor) -> torch.Tensor:
             return energy(x)
@@ -79,7 +79,7 @@ def build_objective_func(energy: Energy, batch_optim: bool, use_prox: bool) -> C
         u_clean = energy.measurement_model.u_clean
         for i in range(u_clean.shape[0]):
             sample_measurement_model = MeasurementModel(u_clean[i:i + 1, :, :, :], operator=operator,
-                                                        noise_level=noise_level)
+                                                        noise_level=noise_level, resample_measurement_noise=resample_measurement_noise)
             sample_energy = Energy(sample_measurement_model, regulariser, lam)
             per_sample_energy_models.append(sample_energy)
 
@@ -91,18 +91,10 @@ def build_objective_func(energy: Energy, batch_optim: bool, use_prox: bool) -> C
 
         return func
     else:
-        # TODO
-        #   > update me: using vmap here is rather bad ...
-        #   > make profit of reduce=True/False implementation of potential functions ...
-
         regulariser = energy.regulariser
         lam = energy.lam
-        def per_sample_objective_func(x) -> torch.Tensor:
-            return lam * regulariser(x)
-
-        def func(*x: torch.Tensor) -> torch.Tensor:
-            return torch.vmap(per_sample_objective_func)(torch.cat(x, dim=0))
-
+        def func(x: torch.Tensor) -> torch.Tensor:            
+            return lam * torch.sum(regulariser(x, reduce=False), dim=(-3, -2, -1))
 
     return func
 
@@ -163,6 +155,8 @@ def solve_lower(energy: Energy, method: str, options: Dict[str, Any]) -> LowerPr
             of batch-optimisation as well as in case of per-sample optimisation.
             If lip_const and alpha are not specified, the default value 1e5 for the full batch optimisation or
             per sample optimisation is used.
+          resample_measurement_noise: bool, optional
+            Boolean flag indicating if measurement noise is resampled at each iteration. 
         - method == 'napg'
           ---------------
           max_num_iterations: int
@@ -201,13 +195,20 @@ def solve_lower(energy: Energy, method: str, options: Dict[str, Any]) -> LowerPr
           weight_decay: float, optional
             Weights for L^2 penalisation. Again, the same handling as for 'lr' is applied. Per default the
             value 0.0 is used.
+          resample_measurement_noise: bool, optional
+            Boolean flag indicating if measurement noise is resampled at each iteration. 
     :return: Instance of class LowerProblemResult containing the solution tensor, the number of performed iterations,
         the final loss, and a message indicating why iteration terminated.
     """
     batch_optim = options.get('batch_optimisation', True)
+    resample_measurement_noise = options.get('resample_measurement_noise', False)
+    energy.measurement_model.resample_measurement_noise = resample_measurement_noise
 
     if method == 'nag':
-        func = build_objective_func(energy, batch_optim=batch_optim, use_prox=False)
+        func = build_objective_func(energy, 
+                                    batch_optim=batch_optim, 
+                                    use_prox=False, 
+                                    resample_measurement_noise=resample_measurement_noise)
         grad_func = build_gradient_func(func, batch_optim=batch_optim)
 
         param_groups = assemble_param_groups_nag(energy.measurement_model.get_noisy_observation().detach().clone(),
@@ -216,6 +217,11 @@ def solve_lower(energy: Energy, method: str, options: Dict[str, Any]) -> LowerPr
         nag_result = optimise_nag(func, grad_func, param_groups, **options)
         lower_prob_result = parse_result(nag_result, **options)
     elif method == 'napg':
+        # TODO
+        # ----
+        #   > Resampling measurement noise has no effect yet if napg is used - this is because
+        #     prox-operator needs to be adjusted accordingely.
+
         func = build_objective_func(energy, batch_optim=batch_optim, use_prox=True)
         grad_func = build_gradient_func(func, batch_optim=batch_optim)
 
@@ -228,11 +234,15 @@ def solve_lower(energy: Energy, method: str, options: Dict[str, Any]) -> LowerPr
         nag_result = optimise_nag(func, grad_func, param_groups, **options)
         lower_prob_result = parse_result(nag_result, **options)
     elif method == 'adam':
+        func_ = build_objective_func(energy, 
+                                     batch_optim=batch_optim, 
+                                     use_prox=False, 
+                                     resample_measurement_noise=resample_measurement_noise)
+        func = lambda *z: torch.sum(func_(torch.cat(z, dim=0)))
+
         param_groups = assemble_param_groups_adam(energy.measurement_model.get_noisy_observation().detach().clone(),
                                                   **options)
-
-        func = lambda *z: torch.sum(build_objective_func(energy, batch_optim=batch_optim, use_prox=False)(torch.cat(z, dim=0)))
-
+        
         adam_result = optimise_adam(func, param_groups, **options)
         lower_prob_result = parse_result(adam_result, **options)
     elif method == 'nag_unrolling':
@@ -256,6 +266,7 @@ def solve_lower(energy: Energy, method: str, options: Dict[str, Any]) -> LowerPr
 
         nag_result = optimise_nag_unrolling(func, grad_func, param_groups, **options)
         lower_prob_result = parse_result(nag_result, **options)
+    
     elif method == 'your_custom_method':
         # Custom method for solving the lower problem or by map
         # estimation of by mmse estimation goes here. Use the following

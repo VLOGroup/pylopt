@@ -1,2 +1,0 @@
-from pylopt.fields_of_experts.FieldsOfExperts import FieldsOfExperts
-from pylopt.fields_of_experts.compilation import compile_regulariser

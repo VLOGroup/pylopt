@@ -148,8 +148,8 @@ def backtracking_line_search(param: torch.nn.Parameter, grads: torch.Tensor, clo
         _ = make_gradient_step(param, grads, 1 / lip_const)
 
         loss_new = closure()
-        quadr_approx = (loss + torch.sum(grads * (param - param_orig), dim=[-3, -2, -1])
-                        + 0.5 * lip_const * torch.sum((param - param_orig) ** 2, dim=[-3, -2, -1]))
+        quadr_approx = (loss + torch.sum(grads * (param - param_orig), dim=tuple(range(1, grads.ndim)) or None)
+                        + 0.5 * lip_const * torch.sum((param - param_orig) ** 2, dim=tuple(range(1, grads.ndim)) or None))
         sufficient_descent_met = loss_new <= quadr_approx
 
         param.data.copy_(param_orig)
@@ -250,6 +250,7 @@ def optimise_nag(func: Callable, grad_func: Callable, param_groups: List[Dict[st
 
     loss = -1 * torch.ones(1)
     for k in range(0, max_num_iterations):
+
         loss = step_nag(func, grad_func, param_groups_)
 
         if rel_tol:

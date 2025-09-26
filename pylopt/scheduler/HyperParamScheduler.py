@@ -40,8 +40,13 @@ class AdaptiveLRRestartScheduler(HyperParamScheduler):
         Foundations of computational mathematics, 15(3), pp.715-732.
     """
 
-    def __init__(self, condition_func: Callable, gamma: float=0.9999, warm_up_period: int=100, patience: int=10,
-                 lr_key: str='lr') -> None:
+    def __init__(self, 
+                 condition_func: Callable, 
+                 gamma: float=0.9999, 
+                 warm_up_period: int=100, 
+                 patience: int=10,
+                 lr_key: str='lr'
+    ) -> None:
         super().__init__()
 
         self.condition_func = condition_func
@@ -101,7 +106,7 @@ class CosineAnnealingLRScheduler(HyperParamScheduler):
         :param step_end: End of annealing window
         :param lr_min: Minimal learning rate
         :param lr_key: Key of learning within parameter groups
-        :param restart_cycle: Optional integer indicating the after how many iterations (within the annealing window)
+        :param restart_cycle: Optional integer indicating after how many iterations (within the annealing window)
             a restart shall be performed; if None no restarts were performed.
         :param restart_cycle_multi: Multiplier to adjust length of the restart cycle over training; if None
             the restart cycles keep the same length.
@@ -136,25 +141,27 @@ class CosineAnnealingLRScheduler(HyperParamScheduler):
 
     def step(self,  **kwargs: Dict[str, Any]) -> None:
         self.step_counter += 1
-        if self.step_begin <= self.step_counter <= self.step_end:
-            self.steps_since_restart_counter += 1
-
-            if self.steps_since_restart_counter % self.decay_cycle_len == 0:
-                self.steps_since_restart_counter = 0
+        if self.step_begin <= self.step_counter < self.step_end:
+            if self.steps_since_restart_counter > 0 and self.steps_since_restart_counter % self.decay_cycle_len == 0:
+                self.steps_since_restart_counter = -1
                 self.decay_cycle_len = int(self.decay_cycle_multi * self.decay_cycle_len)
+            self.steps_since_restart_counter += 1
             self._update_param_group()
 
-class NAGBacktrackingScheduler(HyperParamScheduler):
-    pass
+class AdaptiveNAGRestartScheduler(HyperParamScheduler):
 
-class NAGRestartScheduler(HyperParamScheduler):
-    # TODO
-    #   > Review me!
-    def __init__(self, restart_freq: int, reset_keys: List[str]) -> None:
+    def __init__(self, 
+                 condition_func: Callable, 
+                 warm_up_period: int=100, 
+                 patience: int=10,
+                 lip_const_key: str=LIP_CONST_KEY,
+                 beta_key: str='beta',              # momentum parameter
+                 theta_key: str='theta'             # parameter use to compute momentum parameter
+    ) -> None:
         super().__init__()
 
-        self.restart_freq = restart_freq
-        self.reset_keys = reset_keys
+        self.condition_func = condition_func
+        self.lip_const_key = lip_const_key
 
         self.param_groups = None
         self.base_values = None
@@ -164,16 +171,30 @@ class NAGRestartScheduler(HyperParamScheduler):
 
         self.base_values = []
         for group in param_groups:
-            self.base_values.append({key: group.get(key, None) for key in self.reset_keys})
+            self.base_values.append({self.lip_const_key: group.get(self.lip_const_key, None)})
 
-    def step(self) -> None:
+    def _perform_restart() -> None:
+
+        # reset lip_const
+        # refresh history
+        # reset momentum parameters
+        for idx, group in enumerate(self.param_groups):
+            pass
+
+    def step(self, **kwargs) -> None:
         self.step_counter += 1
 
-        if self.step_counter % self.restart_freq == 0:
-            for idx, group in enumerate(self.param_groups):
-                for key in self.base_values[idx]:
-                    if key in group.keys():
-                        group[key] = self.base_values[idx].get(key, group[key])
+        if self.condition_func(self.param_groups, **kwargs) and self.step_counter >= self.warm_up_period:
+            self.num_bad_iterations += 1
+            if self.num_bad_iterations == self.patience:
+                self._perform_restart()
+                self.num_bad_iterations = 0
+
+        # if self.step_counter % self.restart_freq == 0:
+        #     for idx, group in enumerate(self.param_groups):
+        #         for key in self.base_values[idx]:
+        #             if key in group.keys():
+        #                 group[key] = self.base_values[idx].get(key, group[key])
 
 class NAGLipConstGuard(HyperParamScheduler):
     """
@@ -221,7 +242,7 @@ class NAGLipConstGuard(HyperParamScheduler):
             group[self.lip_const_key] = [min(0.5 * self.lip_const_bound, item) for item in group[self.lip_const_key]]
         return group
 
-    def step(self) -> None:
+    def step(self, **kwargs: Dict[str, Any]) -> None:
         self.step_counter += 1
 
         if self.group_name == 'all':

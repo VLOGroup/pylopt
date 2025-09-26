@@ -41,3 +41,6 @@ def restart_condition_gradient_based(param_groups: List[Dict[str, Any]], **kwarg
         ret_val = tmp > 0
 
     return ret_val
+
+def restart_condition_frequency_based() -> bool:
+    pass

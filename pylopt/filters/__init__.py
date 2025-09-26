@@ -1,1 +1,0 @@
-from pylopt.filters.ImageFilter import ImageFilter

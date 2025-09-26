@@ -11,7 +11,7 @@ from pylopt.callbacks import Callback
 from pylopt.energy.Energy import Energy
 from pylopt.fields_of_experts import FieldsOfExperts
 from pylopt.filters import ImageFilter
-from pylopt.measurement_model.MeasurementModel import MeasurementModel
+from pylopt.energy.MeasurementModel import MeasurementModel
 from pylopt.optimise import step_adam, create_projected_optimiser, step_nag
 from pylopt.optimise.optimise_adam import harmonise_param_groups_adam
 from pylopt.optimise.optimise_lbfgs import harmonise_param_groups_lbfgs
@@ -108,15 +108,35 @@ class BilevelOptimisation:
     gradient based methods are considered, where gradients are computed using implicit differentiation or
     an unrolling scheme. The unrolling scheme requires that the lower level problem is solved using NAG or NAPG.
     """
-    def __init__(self, method_lower: str, options_lower: Dict[str, Any], config: Configuration,
-                 differentiation_method: str='implicit', solver_name: Optional[str]='cg',
+    def __init__(self,
+                 method_lower: str, 
+                 options_lower: Dict[str, Any], 
+                 operator: Optional[torch.nn.Module]=None,
+                 noise_level: Optional[float]=None,
+                 config: Optional[Configuration]=None,
+                 differentiation_method: str='implicit', 
+                 solver_name: Optional[str]='cg',
                  options_solver: Optional[Dict[str, Any]]=None,
-                 path_to_experiments_dir: Optional[str]=None) -> None:
+                 path_to_experiments_dir: Optional[str]=None
+    ) -> None:
         """
         Initialisation of BilevelOptimisation.
 
+        NOTE
+        ----
+            > For the setup of an instance of this class or the operator and the noise level 
+                must be specified directly when calling the constructor, or by means of 
+                a configuration object of type Configuration.
+            > If a configuation object is provided, the config values are written to file.
+
+        TODO
+        ----
+            > Make class completely configurable by config.
+
         :param method_lower: String indicating the solution method for the lower level problem.
         :param options_lower: Dictionary of options for the solution of the lower level problem
+        :param operator: PyTorch module representing the forward operator
+        :param noise_level: Float in the interval (0, 1) representing the noise level.
         :param config: Configuration object for the setup of measurement model and energy
         :param differentiation_method: String indicating which differentiation method is used:
             > 'implicit': Computation of derivative of upper level objective function using the implicit
@@ -142,15 +162,19 @@ class BilevelOptimisation:
             will be stored. If not provided, an experiment directory in the root directory of this python
             project is created.
         """
+        self.path_to_experiments_dir = create_experiment_dir(self.config) if path_to_experiments_dir is None \
+            else path_to_experiments_dir
+
         self.backward_mode = differentiation_method
 
         self.method_lower = method_lower
         self.options_lower = options_lower
 
         self.config = config
-        self.path_to_experiments_dir = create_experiment_dir(self.config) if path_to_experiments_dir is None \
-            else path_to_experiments_dir
-        dump_configs(self.config, self.path_to_experiments_dir)
+        if self.config is not None:
+            dump_configs(config, self.path_to_experiments_dir)
+        self.noise_level = noise_level
+        self.operator = operator
 
         self.solver_name = solver_name
         if self.solver_name == 'cg':
@@ -267,7 +291,8 @@ class BilevelOptimisation:
        try:
            for k, batch in enumerate(train_loader):
                batch_ = batch.to(dtype=dtype, device=device)
-               measurement_model = MeasurementModel(batch_, config=self.config)
+               measurement_model = MeasurementModel(batch_, config=self.config, 
+                                                    operator=self.operator, noise_level=self.noise_level)
 
                energy = Energy(measurement_model, regulariser, lam)
                energy = energy.to(device=device, dtype=dtype)
@@ -320,7 +345,8 @@ class BilevelOptimisation:
                 with torch.no_grad():
                     batch_ = batch.to(dtype=dtype, device=device)
 
-                    measurement_model = MeasurementModel(batch_, config=self.config)
+                    measurement_model = MeasurementModel(batch_, config=self.config,
+                                                         operator=self.operator, noise_level=self.noise_level)
                     energy = Energy(measurement_model, regulariser, lam)
                     energy = energy.to(device=device, dtype=dtype)
 
@@ -372,7 +398,8 @@ class BilevelOptimisation:
                 with torch.no_grad():
                     batch_ = batch.to(dtype=dtype, device=device)
 
-                    measurement_model = MeasurementModel(batch_, config=self.config)
+                    measurement_model = MeasurementModel(batch_, config=self.config,
+                                                         operator=self.operator, noise_level=self.noise_level)
                     energy = Energy(measurement_model, regulariser, lam)
                     energy = energy.to(device=device, dtype=dtype)
 

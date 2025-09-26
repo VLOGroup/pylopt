@@ -2,8 +2,8 @@ import torch
 from abc import ABC
 from typing import Dict, Any
 
-from pylopt.fields_of_experts import FieldsOfExperts, compile_regulariser
-from pylopt.measurement_model import MeasurementModel
+from pylopt.regularisers.fields_of_experts import FieldsOfExperts, compile_regulariser
+from pylopt.energy import MeasurementModel
 
 class Energy(torch.nn.Module, ABC):
     """

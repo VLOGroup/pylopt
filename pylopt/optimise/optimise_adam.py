@@ -69,7 +69,8 @@ def optimise_adam(func: Callable, param_groups: List[Dict[str, Any]], max_num_it
     num_iterations = max_num_iterations
 
     param_groups_ = harmonise_param_groups_adam(param_groups)
-    optimiser = create_projected_optimiser(torch.optim.Adam)(param_groups_)
+    optimiser = create_projected_optimiser(torch.optim.SGD)(param_groups_)
+
 
     for k in range(0, max_num_iterations):
         _ = step_adam(optimiser, func, param_groups_)

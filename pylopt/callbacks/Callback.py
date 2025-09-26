@@ -73,7 +73,7 @@ class SaveModel(Callback):
 
     def on_step(self, step: int, regulariser: Optional[FieldsOfExperts]=None,
                 loss: Optional[torch.Tensor]=None, **kwargs) -> None:
-        if step % self.save_freq and regulariser is not None:
+        if step % self.save_freq == 0 and regulariser is not None:
             if not os.path.exists(self.path_to_model_dir):
                 os.makedirs(self.path_to_model_dir, exist_ok=True)
             regulariser.get_image_filter().save(self.path_to_model_dir, 'filters_iter_{:d}.pt'.format(step))
@@ -131,7 +131,7 @@ class PlotFiltersAndPotentials(Callback):
         device = kwargs.get('device', None)
         dtype = kwargs.get('dtype', None)
 
-        if step % self.plotting_freq and regulariser is not None:
+        if step % self.plotting_freq == 0 and regulariser is not None:
             self._plot_filters(step, regulariser)
             self._plot_potentials(step, regulariser, device, dtype)
 
@@ -274,7 +274,7 @@ class TrainingMonitor(Callback):
 
     def on_step(self, step: int, regulariser: Optional[FieldsOfExperts]=None,
                 loss: Optional[torch.Tensor]=None, **kwargs) -> None:
-        if step % self.evaluation_freq:
+        if step % self.evaluation_freq == 0:
             logging.info('[{:s}] log statistics and hyperparameters'.format(self.__class__.__name__))
 
             param_groups = kwargs.get('param_groups', None)
@@ -293,7 +293,7 @@ class TrainingMonitor(Callback):
 
                 for key in self.HYPERPARAM_KEYS:
                     if key in group.keys():
-                        hparam = group[key]
+                        hparam = group[key] if isinstance(group[key], float) else group[key][0]
                         if not key in self.hyperparam_dict[name]:
                             self.hyperparam_dict[name][key] = []
 

@@ -1,7 +1,7 @@
 import os
 from confuse import Configuration
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 import yaml
 
 def dump_configs(config: Configuration, path_to_data_dir: str) -> None:
@@ -33,3 +33,12 @@ def create_experiment_dir(config: Configuration) -> str:
     os.makedirs(path_to_eval_dir, exist_ok=True)
 
     return path_to_eval_dir
+
+def get_repo_root_path(start: Path = Path(__file__).resolve(), marker: str='pyproject.toml') -> Optional[Path]:
+    repo_root_path = None
+    for parent in [start, *start.parents]:
+        if (parent / marker).exists():
+            repo_root_path = parent
+            break
+    
+    return repo_root_path
