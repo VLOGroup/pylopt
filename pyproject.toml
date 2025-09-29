@@ -14,7 +14,8 @@ dependencies = [
     'matplotlib>=3.10.1',
     'PyQt5>=5.15.11',
     'torchvision>=0.21.0',
-    'pillow>=11.1.0'
+    'pillow>=11.1.0',
+    'ninja>=1.13.0'
 ]
 authors = [
     {name = 'Florian Thaler', email = 'florian.thaler@tugraz.at'},
@@ -31,11 +32,11 @@ classifiers = ['Programming Language :: Python :: 3']
 
 [tool.setuptools.packages.find]
 where = ['.']
-exclude = ['tests*', 'docs*', 'data*', 'data_analysis*', 'images*', 'artefacts*']
+exclude = ['tests*', 'docs*', 'data*', 'data_analysis*', 'images*', 'artefacts*', 'examples*']
 
 [tool.setuptools.package-data]
-pylopt = ['model_data/*.pt', 'config_data/*', 'examples/notebooks/*.ipynb']
+pylopt = ['model_data/*.pt', 'examples/notebooks/*.ipynb']
 
 [project.urls]
-Documentation = ''
-Repository = ''
+#Documentation = ''
+#Repository = ''

@@ -17,3 +17,15 @@ pandas==2.3.2
 ninja==0.13.0
 quartic_bspline_extension>=0.3.0
 
+# Build process
+setuptools==65.5.0
+build==1.3.0
+wheel==0.45.1
+
+# Build docs
+sphinx-autobuild==2025.8.25
+sphinx-rtd-theme==3.0.2
+myst-parser==4.0.1
+
+# Publishing on PyPI
+twine==6.2.0
