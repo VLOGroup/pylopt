@@ -7,14 +7,11 @@ matplotlib==3.10.1
 PyQt5==5.15.11
 torchvision==0.21.0
 pillow==11.1.0
-sphinx-rtd-theme==3.0.2
-Sphinx==8.2.3
-build==1.2.2.post1
 tensorboard==2.19.0
 jupyter==1.1.1
 pandas==2.3.2
 
-ninja==0.13.0
+ninja==1.13.0
 quartic_bspline_extension>=0.3.0
 
 # Build process

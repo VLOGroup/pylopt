@@ -51,16 +51,22 @@ def bilevel_learn(config: Configuration) -> None:
     # --- Ad example_training_I
     #   > Filters are loaded from file
     repo_root_path = get_repo_root_path(Path(__file__))
-    image_filter = ImageFilter.from_file(os.path.join(repo_root_path, 
-                                                      'data', 'model_data',
-                                                      PRETRAINED_FILTER_MODELS['chen-ranftl-pock_2014_scaled_7x7']))
-    image_filter.freeze()
+
+    image_filter = ImageFilter.from_config(config)
+    # image_filter = ImageFilter.from_file(os.path.join(repo_root_path, 
+    #                                                   'data', 'model_data',
+    #                                                   PRETRAINED_FILTER_MODELS['chen-ranftl-pock_2014_scaled_7x7']))
+    # image_filter.freeze()
     
     # --- Ad example_training_II
     #   > Filters will be configured by means of config
     # image_filter = ImageFilter.from_config(config)
 
     potential = StudentT.from_config(config)
+
+    image_filter.unfreeze()
+    potential.unfreeze()
+
     regulariser = FieldsOfExperts(potential, image_filter)
 
     method_lower = 'napg'
@@ -93,11 +99,11 @@ def bilevel_learn(config: Configuration) -> None:
                                  path_to_eval_dir, evaluation_freq=1, tb_writer=tb_writer)]
 
     method_upper = 'adam'
-    max_num_iterations = 1000
+    max_num_iterations = 10000
     if method_upper == 'nag':
         options_upper = {'max_num_iterations': max_num_iterations, 'lip_const': [1000], 'alternating': True}
     elif method_upper == 'adam':
-        options_upper = {'max_num_iterations': max_num_iterations, 'lr': [1e-2], 'alternating': True}
+        options_upper = {'max_num_iterations': max_num_iterations, 'lr': [1e-3, 1e-1], 'alternating': True}
     elif method_upper == 'lbfgs':
         options_upper = {'max_num_iterations': max_num_iterations, 'max_iter': 10, 'history_size': 10,
                          'line_search_fn': 'strong_wolfe'}
@@ -112,12 +118,12 @@ def bilevel_learn(config: Configuration) -> None:
 
     # --- Schedulers for upper level optimisation affecting the learning rate (Adam, LBFGS)
     #
-    # schedulers = [CosineAnnealingLRScheduler(step_begin=5, 
-    #                                          restart_cycle=3,
-    #                                          step_end=15,
-    #                                          lr_min=1e-5)]
+    schedulers = [CosineAnnealingLRScheduler(step_begin=5, 
+                                             restart_cycle=None,
+                                             step_end=8500,
+                                             lr_min=1e-5)]
 
-    schedulers = [AdaptiveLRRestartScheduler(restart_condition_gradient_based, warm_up_period=2)]
+    # schedulers = [AdaptiveLRRestartScheduler(restart_condition_gradient_based, warm_up_period=2)]
     
 
 

@@ -22,11 +22,11 @@ data:
   type: 'float32'
   dataset:
     train:
-      root_dir: '/home/thaler/Documents/data/image_data/BSDS300/images/train'
+      root_dir: '/home/florianthaler/Documents/data/image_data/BSDS300/images/train'
       crop_size: 64
       batch_size: 128
     test:
-      root_dir: '/home/thaler/Documents/data/image_data/some_images'
+      root_dir: '/home/florianthaler/Documents/data/image_data/some_images'
 
 energy:
   lam: 100

@@ -38,7 +38,7 @@ PyLOpt aims to serve as a toolbox for scientists and engineers to address bileve
 
 ### Current features
 
-- Image reconstruction using pretrained filter and potential models by solving the lower level problem $\operatorname{arginf}_{u}E(u, u^{(\delta)}, \theta)$ using one of the following gradient-based methods
+- Image reconstruction using pretrained filter and potential models by solving the lower level problem $\mathop{\text{arginf}}_{u}E(u, u^{(\delta)}, \theta)$ using one of the following gradient-based methods
   - NAG: Nesterov accelerated gradient method - see f.e. [[5]](#5)
   - NAPG: Proximal gradient method with Nesterov acceleration - see f.e. [[4]](#4)
   - Adam: See [[6]](#6)
@@ -200,88 +200,7 @@ Concrete and executable code for training and prediction is contained in `pylopt
   |:--------------------------------------------------:|:-------------------------------------------------:|:------------------------------------------------:|
   | ![](images/results/training_II/training_stats.png) |  ![](images/results/training_II/filter_stats.png) | ![](images/results/training_II/potentials.png)   |
 
-- **Example III**
-  - Filters:
-    - 7x7 DCT filters
-    - Trainable
-  - Potential: 
-    - Type: Student-t
-    - Weights:
-      - Uniform initialisation
-      - Trainable
-  - Inner energy: `OptimisationEnergy`
-  - Optimiser:
-    - Inner: NAGOptimiser
-    - Outer: Adam
 
-  To train filters and filter weights with these specifications, call
-  ```
-  python examples/scripts/denoising_train.py --configs example_training_III
-  ```
-
-  We obtain similar denoising results as before:
-
-  
-  |                    Training stats                    |                   Filter stats                    |                Potential weight stats                |                Student-t potential                |
-  |:----------------------------------------------------:|:-------------------------------------------------:|:----------------------------------------------------:|:-------------------------------------------------:|
-  |  ![](images/results/training_III/training_stats.png) | ![](images/results/training_III/filter_stats.png) | ![](images/results/training_III/student_t_stats.png) | ![](images/results/training_III/potentials.png)   |
-
-- **Example IV** 
-  - Filters:
-    - Uniform on [-1, 1]
-    - Trainable
-  - Potential: 
-    - Type: Student-t
-    - Weights:
-      - Uniform initialisation
-      - Trainable
-  - Inner energy: `OptimisationEnergy`
-  - Optimiser:
-    - Inner: NAGOptimiser
-    - Outer: Adam
-
-  Results: ...
-
-- **Example V**
-  - Filters:
-    - Uniform on [-1, 1]
-    - Trainable
-  - Potential: 
-    - Type: Student-t
-    - Weights:
-      - Uniform initialisation
-      - Trainable
-  - Inner energy: `UnrollingEnergy`
-  - Optimiser:
-    - Inner: UnrollingNAGOptimiser
-    - Outer: NAGOptimiser
-
-  To train the Student-t potential weights with this configuration run   
-  ```
-  python examples/scripts/denoising_train.py --configs example_training_V
-  ```
-  
-  Using the unrolling scheme provided in `UnrollingNAGOptimiser` we obtain descent results:
-
-
-  |                   Training stats                    |                    Test triplet                    |
-  |:---------------------------------------------------:|:--------------------------------------------------:|
-  | ![](./images/results/training_V/training_stats.png) | ![](./images/results/training_V/test_triplets.jpg) |
-
-
-- **Example VI**
-  - Potential: Gaussian mixture
-  - Filters:
-    - Pretrained filters from [[1]](#1)
-    - Non-trainable
-  - Filter weights:
-    - Pretrained filters using configuration in Example I
-    - Non-trainable
- - Optimiser:
-    - Inner: NAGOptimiser
-    - Outer: Adam
-
-  Results: ...
 
 ## Contributing
 
