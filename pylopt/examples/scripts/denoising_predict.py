@@ -121,13 +121,12 @@ def denoise() -> None:
 
     # energy.compile()
 
-    method = 'adam'
+    method = 'nag'
     if method == 'nag':
         options = {'max_num_iterations': 1000, 
                    'rel_tol': 1e-5, 
                    'batch_optimisation': False, 
-                   'lip_const': 1e1,
-                   'resample_measurement_noise': False       # improves image reconstruction
+                   'lip_const': 1e1
                    }
     elif method == 'napg':
         prox = DenoisingProx(noise_level=noise_level)
@@ -140,8 +139,7 @@ def denoise() -> None:
         options = {'max_num_iterations': 1000, 
                    'rel_tol': 1e-5, 
                    'lr': 1e-3, 
-                   'batch_optimisation': False, 
-                   'resample_measurement_noise': False        # improves image reconstruction
+                   'batch_optimisation': False
                    }
     elif method == 'nag_unrolling':
         options = {'max_num_iterations': 35, 

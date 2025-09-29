@@ -51,11 +51,13 @@ def bilevel_learn(config: Configuration) -> None:
     # --- Ad example_training_I
     #   > Filters are loaded from file
     repo_root_path = get_repo_root_path(Path(__file__))
-
-    image_filter = ImageFilter.from_config(config)
     # image_filter = ImageFilter.from_file(os.path.join(repo_root_path, 
     #                                                   'data', 'model_data',
     #                                                   PRETRAINED_FILTER_MODELS['chen-ranftl-pock_2014_scaled_7x7']))
+
+
+    image_filter = ImageFilter.from_config(config)
+
     # image_filter.freeze()
     
     # --- Ad example_training_II

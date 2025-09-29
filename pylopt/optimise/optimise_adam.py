@@ -9,6 +9,9 @@ DEFAULTS_GROUP_ADAM = {LR_KEY: 1e-4, 'betas': (0.9, 0.999), 'weight_decay': 0.0,
 
 def create_projected_optimiser(base_optimiser: type[torch.optim.Optimizer]) -> type[torch.optim.Optimizer]:
 
+    # TODO
+    #   > take list of projections as input
+
     class ProjectedOptimiser(base_optimiser):
         def __init__(self, params, *args, **kwargs):
             super().__init__(params, *args, **kwargs)
@@ -23,6 +26,10 @@ def create_projected_optimiser(base_optimiser: type[torch.optim.Optimizer]) -> t
                             continue
                         if hasattr(p, 'orthogonal_projection'):
                             p.data.copy_(p.orthogonal_projection(p))
+                        
+                        if hasattr(p, 'unit_ball_projection'):
+                            p.data.copy_(p.unit_ball_projection(p))
+
                         if hasattr(p, 'zero_mean_projection'):
                             p.data.copy_(p.zero_mean_projection(p.data))
             return loss

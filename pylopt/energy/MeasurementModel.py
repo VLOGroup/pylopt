@@ -12,8 +12,7 @@ class MeasurementModel(torch.nn.Module):
                  u_clean: torch.Tensor, 
                  operator: Optional[torch.nn.Module]=None, 
                  noise_level: Optional[float]=None, 
-                 config: Optional[Configuration]=None,
-                 resample_measurement_noise: bool=False) -> None:
+                 config: Optional[Configuration]=None) -> None:
         """
         Initialisation of an object of class MeasurementModel. 
 
@@ -25,8 +24,6 @@ class MeasurementModel(torch.nn.Module):
         :param operator: PyTorch module representing the forward operator
         :param noise_level: Float in the interval (0, 1) representing the noise level
         :param config: Configuration object for the configuration of operator and noise level.
-        :param resample_measurement_noise: Boolean indicating if measurement noise shall be
-            regenerated after each forward call.
         """
         super().__init__()
         self.u_clean = torch.nn.Parameter(u_clean, requires_grad=False)
@@ -44,7 +41,6 @@ class MeasurementModel(torch.nn.Module):
         else:
             raise ValueError('Must provide config or both, operator and noise_level.')
 
-        self.resample_measurement_noise = resample_measurement_noise
         self.u_noisy = torch.nn.Parameter(self.make_noisy_observation(), requires_grad = False)
 
     def get_clean_data(self) -> torch.nn.Parameter:
@@ -71,8 +67,6 @@ class MeasurementModel(torch.nn.Module):
         :param u: Tensor of the same shape as clean or noisy data tensor.
         :return: Data fidelty of u
         """
-        if self.resample_measurement_noise:
-            self.u_noisy.copy_(self.make_noisy_observation())
         return 0.5 * torch.sum((u - self.u_noisy) ** 2) / self.noise_level ** 2
 
 

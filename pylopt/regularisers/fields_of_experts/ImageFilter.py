@@ -7,6 +7,10 @@ from scipy.fftpack import idct
 
 ORTHOGONAL_PROJECTION_NAME = 'orthogonal_projection'
 ZERO_MEAN_PROJECTION_NAME = 'zero_mean_projection'
+UNIT_BALL_PROJECTION = 'unit_ball_projection'
+
+def unit_ball_projection(x: torch.Tensor) -> torch.Tensor:
+    return x / torch.sum(torch.abs(x), dim=(-2, -1), keepdim=True)
 
 def zero_mean_projection(x: torch.Tensor) -> torch.Tensor:
     return x - torch.mean(x, dim=(-2, -1), keepdim=True)
@@ -63,11 +67,10 @@ class ImageFilter(torch.nn.Module):
             filter_dim: int=7, 
             padding: int=3, 
             padding_mode: str='reflect', 
-            initialisation_mode: str='rand', 
-            multiplier: float=1.0, 
-            trainable: bool=True, 
+            init_options: Optional[Dict[str, int]]=None,
             orthogonality_options: Optional[Dict[str, int]]=None,
-            normalise: bool=False
+            apply_unit_ball_projection: bool=False,
+            trainable: bool=True, 
     ) -> None:
 
         """
@@ -81,29 +84,40 @@ class ImageFilter(torch.nn.Module):
         :param filter_dim: Filter dimension - 7 by default.
         :param padding: Integer giving the padding which is used when applying filters; 3 by default.
         :param padding_mode: String indicating the padding mode; 'reflect' by default.
-        :param initialisation_mode: String indicating how filters are initialised: 'rand', 'randn', 'dct'. The latter
-            corresponds to the initialisation of the filters by means of the discrete cosine transform. By default
-            'rand' is used.
-        :param multiplier: Float used as scaling factor in the initialisation process; default value equals 1
-        :param trainable: Flag indicating if filter is trainable or not. True by default.
+        :param init_options: Dictionary collecting options for the initialisation of image filters. Keys:
+            - 'mode': String indicating how filters are initialised: 'rand', 'randn', 'dct'. The latter
+                corresponds to the initialisation of the filters by means of the discrete cosine transform. By default
+                'rand' is used.
+            - 'multiplier': Float used as scaling factor in the initialisation process; default value equals 1
+            - 'normalise': Flag indicating if filters are normalised w.r.t. l2 norm within the initialisation procedure. 
+                By default normalisation is not applied. 
         :param orthogonality_options: Dictionary with keys 'enable', 'max_num_iterations'. If orthonalisation
             is enabled, the procrustes algorithm is used to orthogonalise filters at initialisation stage and
             after each update step. For this purpose a callable attribute titled ORTHOGONAL_PROJECTION_NAME
             is created.
             By default orthogonalisation is not applied. Default number of procrustes iterations equals to 5.
-        :param normalise: Flag indicating if filters are normalised (i.e. each filter has norm 1)
-            within the initialisation procedure. By default normalisation is not applied.
+        :param apply_unit_ball_projection: Flag indicating if filters are projected onto unit ball w.r.t.
+            1-norm.
+        :param trainable: Flag indicating if filter is trainable or not. True by default.
         """
         super().__init__()
+
+        default_init = {
+            'mode': 'rand', 
+            'multiplier': 1.0, 
+            'normalise': False
+        }
+        self.init_options = {**default_init, **(init_options or {})}
 
         self.filter_dim = filter_dim
         self.padding = padding
         self.padding_mode = padding_mode
         self.orthogonality_options = orthogonality_options if orthogonality_options is not None else {}
+        self.apply_unit_ball_projection = apply_unit_ball_projection
 
         # initialisation with constructor parameters
-        filter_data = self._init_filter_tensor(filter_dim, initialisation_mode, 
-                                               normalise, self.orthogonality_options, multiplier)
+        filter_data = self._init_filter_tensor(filter_dim, self.init_options,
+                                               self.orthogonality_options)
         self.filter_tensor = torch.nn.Parameter(data=filter_data, requires_grad=trainable)
         self._bind_projections()
 
@@ -123,13 +137,14 @@ class ImageFilter(torch.nn.Module):
 
             setattr(self.filter_tensor, ORTHOGONAL_PROJECTION_NAME, orthogonal_projection)
 
+        if self.apply_unit_ball_projection and not hasattr(self.filter_tensor, UNIT_BALL_PROJECTION):
+            setattr(self.filter_tensor, UNIT_BALL_PROJECTION, unit_ball_projection)
+
     @staticmethod
     def _init_filter_tensor(
             filter_dim: int, 
-            initialisation_mode: str,
-            normalise: bool,
+            init_options: Dict[str, Any],
             orthogonality_options: Dict[str, Any],
-            multiplier: float
     ) -> torch.Tensor:
         """
         Utiliy method for the initialisation of the parameter filter_tensor.
@@ -141,15 +156,15 @@ class ImageFilter(torch.nn.Module):
         :param multiplier:
         :return: PyTorch tensor of shape [num_filters, 1, filter_dim, filter_dim]
         """
-        if initialisation_mode == 'dct':
+        if init_options['mode'] == 'dct':
             can_basis = np.reshape(np.eye(filter_dim ** 2, dtype=np.float64),
                                     (filter_dim ** 2, filter_dim, filter_dim))
             dct_basis = idct(idct(can_basis, axis=1, norm='ortho'), axis=2, norm='ortho')
             dct_basis = dct_basis[1:].reshape(-1, 1, filter_dim, filter_dim)
             filter_data = torch.tensor(dct_basis)
-        elif initialisation_mode == 'randn':
+        elif init_options['mode'] == 'randn':
             filter_data = torch.randn(filter_dim ** 2 - 1, 1, filter_dim, filter_dim)
-        elif initialisation_mode == 'rand':
+        elif init_options['mode'] == 'rand':
             filter_data = 2 * torch.rand(filter_dim ** 2 - 1, 1, filter_dim, filter_dim) - 1
         else:
             raise ValueError('Unknown initialisation method.')
@@ -158,10 +173,10 @@ class ImageFilter(torch.nn.Module):
         if orthogonalise:
             max_num_procrustes_iteations = orthogonality_options.get('max_num_iterations', 5)
             orthogonal_projection_procrustes(filter_data, max_num_iterations=max_num_procrustes_iteations)
-        if normalise:
+        if init_options['normalise']:
             filter_data.divide_(torch.linalg.norm(filter_data, dim=(-2, -1)).reshape(-1, 1, 1, 1))
         filter_data = zero_mean_projection(filter_data)
-        filter_data.mul_(multiplier)
+        filter_data.mul_(init_options['multiplier'])
 
         return filter_data
 

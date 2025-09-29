@@ -99,8 +99,12 @@ def make_gradient_step(param: torch.nn.Parameter, grads: torch.Tensor, alpha: to
 
     NOTE
     ----
-    > In case no in place update is made, projections will not be applied. This is because the non in-place update
-        is required only for the unrolling scheme of the lower level problem, where no projections are needed.
+        > In case no in place update is made, projections will not be applied. This is because the non in-place update
+            is required only for the unrolling scheme of the lower level problem, where no projections are needed.
+
+    TODO
+    ----
+        > Handle application of projections and prox-operator better.
 
     :param param: PyTorch parameter to be updated.
     :param grads: Gradient of objective function w.r.t. param
@@ -116,6 +120,8 @@ def make_gradient_step(param: torch.nn.Parameter, grads: torch.Tensor, alpha: to
             param.data.copy_(param.prox(param.data, alpha_))
         if hasattr(param, 'orthogonal_projection'):
             param.data.copy_(param.orthogonal_projection(param))
+        if hasattr(param, 'unit_ball_projection'):
+            param.data.copy_(param.unit_ball_projection(param))
         if hasattr(param, 'zero_mean_projection'):
             param.data.copy_(param.zero_mean_projection(param))
     else:
