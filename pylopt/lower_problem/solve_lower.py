@@ -61,7 +61,11 @@ def build_solution_tensor_from_param_groups(param_groups: List[Dict[str, Any]]):
     solution_list = [group['params'][-1] for group in param_groups]
     return torch.cat(solution_list, dim=0)
 
-def build_objective_func(energy: Energy, batch_optim: bool, use_prox: bool, resample_measurement_noise: bool) -> Callable:
+def build_objective_func(energy: Energy, 
+                         batch_optim: bool, 
+                         use_prox: bool, 
+                         resample_measurement_noise: bool=False
+) -> Callable:
     if batch_optim and not use_prox:
         def func(x: torch.Tensor) -> torch.Tensor:
             return energy(x)

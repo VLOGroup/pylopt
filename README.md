@@ -2,8 +2,8 @@
 
 PyLOpt is a PyTorch-based library for learning hyperparameters $\theta$ within the context of image reconstruction by means of solving the bilevel problem
 
-$$(P_{bilevel}) ~~~~~\inf_{\theta} F(u^{*}(\theta), u^{(0)}) ~~~ \text{s.t.}  
-    ~~~ u^{*}(\theta)\in\operatorname{arginf}_{u}E(u, u^{(\delta)}, \theta)$$
+$$(P_\text{bilevel}) ~~~~~\inf_{\theta} F(u^{*}(\theta), u^{(0)}) ~~~ \text{s.t.}  
+    ~~~ u^{*}(\theta)\in\mathop{\text{arginf}}_{u}E(u, u^{(\delta)}, \theta)$$
 
 The function $F$ refers to the upper loss function quantifying the goodness of the learned $\theta$ w.r.t. groundtruth data $u^{(0)}$. $E$ denotes the lower cost or energy function, which is used to reconstruct clean data $u^{(0)}$ from noisy observations $u^{(\delta)}$. We assume that $E$ is of the form
 
@@ -12,7 +12,7 @@ $$E(u, u^{(\delta)}, \theta) =
 
 where $\sigma$ indicates the noise level, $R$ refers to a regulariser and $\lambda>0$ denotes a regularisation parameter. We consider trainable regulariser modelled by means of a Fields of Experts (FoE) model: Let $k_{1}, \ldots, k_{m}$ denote quadratic image filters and let $\rho(\cdot| \gamma)$ be a parameter-dependent potential function. For the potential parameters $\gamma_{1}, \ldots, \gamma_{m}$, and the merged parameter $\theta$ comprising filters and potential parameters, we define
 
-$$R(u, \theta) = \sum_{j}\sum_{i}-\log\rho([k_{j} * u]_{i}|\gamma_{j}),$$
+$$R(u, \theta) = \sum_{j}\sum_{i}\rho([k_{j} * u]_{i}|\gamma_{j}),$$
 
 where in the inner sum we sum up all elements of the $j$-th filter response.
 
@@ -43,7 +43,7 @@ PyLOpt aims to serve as a toolbox for scientists and engineers to address bileve
   - NAPG: Proximal gradient method with Nesterov acceleration - see f.e. [[4]](#4)
   - Adam: See [[6]](#6)
   - Unrolling: Both NAG and NAPG are implemented as well using an unrolled approach. This allows to solve the upper-level problem using automatic differentiation.
-- Training of filters and/or potentials of an FoE regualriser model by solving the bilevel problem $P_{bilevel}$. The training relies on the application of one the following gradient-based methods onto the upper problem:
+- Training of filters and/or potentials of an FoE regualriser model by solving the bilevel problem $P_\text{bilevel}$. The training relies on the application of one the following gradient-based methods onto the upper problem:
   - NAG
   - Adam
   - LBFGS: Quasi-Newton method - see [[7]](#7)
@@ -88,7 +88,7 @@ For the usage of the package and its methods see section [Usage](#usage).
 
 ### Conceptual
 
-The interface of the function `solve_lower()` which is used to solve the lower level problem is designed to closely follow the conventions of SciPy optimisation routines. Given an `Energy` instance, the corresponding lower level problem can be solved using Nesterov's accelerated gradient method (NAG) via
+The interface of the function `solve_lower()` which is used to solve the lower level problem is designed to closely follow the conventions of SciPy optimisation routines. Given an `Energy` instance, the corresponding lower level problem can be solved for example using Nesterov's accelerated gradient method (NAG) via
 
 ```python
 lower_prob_result = solve_lower(energy=energy, method='nag', 
@@ -118,7 +118,7 @@ bilevel_optimisation.learn(regulariser, lam, l2_loss_func, train_image_dataset,
 
 ### Concrete
 
-Concrete and executable code for training and prediction is contained in `bilevel_optimisation/examples`. Please note that reproducibility of training results can be obtained only when using the datatype `torch.float64`. However, this comes at the cost of increased computation time. 
+Concrete and executable code for training and prediction is contained in `pylopt/examples`. Please note that reproducibility of training results can be obtained only when using the datatype `torch.float64`. However, this comes at the cost of increased computation time. 
 
 #### Denoising using pretrained models
 
@@ -126,7 +126,7 @@ Concrete and executable code for training and prediction is contained in `bileve
   - Filters: Pretrained filters from [[1]](#1)
   - Potential: 
     - Type: Student-t
-    - Weights: Optimised using `BilevelOptimisation`
+    - Weights: Optimised using `pylopt`
 
   To run the script, execute
 
@@ -134,22 +134,18 @@ Concrete and executable code for training and prediction is contained in `bileve
     python examples/scripts/denoising_predict.py
     ```
   
-  Alternatively, run the Jupyter notebook `example_denoising_predict.ipynb`. Denoising the images `watercastle`
-  and `giraffe` of the well known BSDS300 dataset (see [[3]](#3)), we obtain
+  Alternatively, run the Jupyter notebook `denoising_predict.ipynb`. Denoising the images `watercastle` and `koala` of the well known BSDS300 dataset (see [[3]](#3)), we obtain
 
-  | Method  | Options                                                                                                 | mean PSNR of denoised images [dB] |
-  |:-------:|:--------------------------------------------------------------------------------------------------------|:---------------------------------:|
-  |  'nag'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'batch_optimisation': True} ```                       |             28.79780              |
-  | 'napg'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'prox': ..., 'batch_optimisation': False} ```         |             28.77631              |
-  | 'adam'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-4, 'lr': [1e-3, 1e-3], 'batch_optimisation': False} ```  |             29.24183              |
+  | Method  | Options                                                                                                         | mean PSNR [dB] | Iter | Time [s] on GPU |
+  |:-------:|:----------------------------------------------------------------------------------------------------------------|:--------------:|:----:|:---------------:|
+  |  'nag'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'batch_optimisation': False, 'lip_const': 1e1} ```            | 29.199395      | 312  | 0.988           |
+  | 'napg'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'prox': ..., 'batch_optimisation': False, 'lip_const': 1} ``` | 29.207625      | 361  | 1.577           |
+  | 'adam'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'lr': [1e-3, 1e-3], 'batch_optimisation': False} ```          | 28.83305       | 1000 | 1.667           |
 
-  and, when using the Adam optimiser:
+  and, when using the NAG optimiser:
 
-  ![](images/results/prediction_I/results.png)
+  ![](data/images/results/prediction_I/results.png)
 
-- **Example II** 
-
-  ...
 
 #### Training of FoE models
 
