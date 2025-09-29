@@ -1,0 +1,32 @@
+image_filter:
+  filter_dim: 7
+  padding: 3
+  padding_mode: 'reflect'
+  initialisation:
+    mode: 'randn'
+    multiplier: 5.0
+  trainable: True
+
+potential:
+  student_t:
+    initialisation:
+      mode: 'uniform'
+      multiplier: 0.0001
+    trainable: True
+
+measurement_model:
+  noise_level: 0.1
+  forward_operator: 'Identity'
+
+data:
+  type: 'float32'
+  dataset:
+    train:
+      root_dir: '/home/thaler/Documents/data/image_data/BSDS300/images/train'
+      crop_size: 64
+      batch_size: 128
+    test:
+      root_dir: '/home/thaler/Documents/data/image_data/some_images'
+
+energy:
+  lam: 100

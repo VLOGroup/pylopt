@@ -1,0 +1,18 @@
+data:
+  type: 'float32'
+  dataset:
+    train:
+      root_dir: '/home/florianthaler/Documents/data/image_data/BSDS300/images/train'
+    test:
+      root_dir: '/home/florianthaler/Documents/data/image_data/some_images'
+
+potential:
+  student_t:
+    num_marginals: 48
+    initialisation:
+      mode: 'uniform'
+      multiplier: 0.0005
+    trainable: True
+
+energy:
+  lam: 10

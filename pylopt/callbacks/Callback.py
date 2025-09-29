@@ -18,11 +18,10 @@ import pandas as pd
 from pylopt.bilevel_problem.parameter_groups import PARAM_GROUP_NAME_KEY
 from pylopt.dataset.dataset_utils import collate_function
 from pylopt.dataset.ImageDataset import TestImageDataset
-from pylopt.energy import Energy
-from pylopt.fields_of_experts import FieldsOfExperts
+from pylopt.energy import Energy, MeasurementModel
 from pylopt.lower_problem import solve_lower
-from pylopt.measurement_model import MeasurementModel
 from pylopt.optimise import LIP_CONST_KEY, LR_KEY
+from pylopt.regularisers.fields_of_experts.FieldsOfExperts import FieldsOfExperts
 from pylopt.utils.evaluation_utils import compute_psnr
 from pylopt.utils.Timer import Timer
 

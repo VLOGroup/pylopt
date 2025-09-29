@@ -9,14 +9,14 @@ from pylopt.bilevel_problem.gradients import ImplicitAutogradFunction, Unrolling
 from pylopt.bilevel_problem.parameter_groups import get_param_group_name, PARAM_GROUP_NAME_KEY
 from pylopt.callbacks import Callback
 from pylopt.energy.Energy import Energy
-from pylopt.fields_of_experts import FieldsOfExperts
-from pylopt.filters import ImageFilter
 from pylopt.energy.MeasurementModel import MeasurementModel
 from pylopt.optimise import step_adam, create_projected_optimiser, step_nag
 from pylopt.optimise.optimise_adam import harmonise_param_groups_adam
 from pylopt.optimise.optimise_lbfgs import harmonise_param_groups_lbfgs
 from pylopt.optimise.optimise_nag import harmonise_param_groups_nag
-from pylopt.potential import Potential
+from pylopt.regularisers.fields_of_experts.FieldsOfExperts import FieldsOfExperts
+from pylopt.regularisers.fields_of_experts.ImageFilter import ImageFilter
+from pylopt.regularisers.fields_of_experts.potential.Potential import Potential
 from pylopt.scheduler import HyperParamScheduler
 from pylopt.solver.CGSolver import CGSolver
 from pylopt.dataset.dataset_utils import collate_function

@@ -1,8 +1,8 @@
 import torch
 from typing import Optional
 
-from pylopt.filters import ImageFilter
-from pylopt.potential import Potential
+from pylopt.regularisers.fields_of_experts.ImageFilter import ImageFilter
+from pylopt.regularisers.fields_of_experts.potential.Potential import Potential
 
 PARAM_GROUP_NAME_KEY = 'name'
 PARAM_GROUP_NAME_DICT = {Potential.__name__: 'potentials', ImageFilter.__name__: 'filters'}

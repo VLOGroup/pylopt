@@ -1,0 +1,5 @@
+from pylopt.regularisers.fields_of_experts.FieldsOfExperts import FieldsOfExperts
+from pylopt.regularisers.fields_of_experts.ImageFilter import ImageFilter
+from pylopt.regularisers.fields_of_experts.potential.Potential import Potential
+from pylopt.regularisers.fields_of_experts.potential.StudentT import StudentT
+from pylopt.regularisers.fields_of_experts.potential.Spline import QuarticBSpline
