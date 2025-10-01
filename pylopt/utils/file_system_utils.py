@@ -17,13 +17,16 @@ def dump_bilevel_training_settings(upper_settings: Dict[str, Any], lower_setting
     with open(settings_file_path, 'w') as file:
         yaml.dump(settings_dict, file, sort_keys=False)
 
-def create_experiment_dir(config: Configuration) -> str:
-    experiments_root_dir = config['data']['experiments']['root_dir'].get()
-    if not experiments_root_dir:
-        package_root_path = Path(__file__).resolve().parents[2]
-        experiments_root_dir = os.path.join(package_root_path, 'data', 'evaluation')
+def create_experiment_dir(root_dir: Optional[str]=None, config: Optional[Configuration]=None) -> str:
+    if config is not None:
+        experiments_root_dir = config['data']['experiments']['root_dir'].get()
+    elif root_dir is not None:
+        experiments_root_dir = root_dir
+    else: 
+        raise ValueError('Or the experiments root directory or a config has to specified.')
+    
+    if not os.path.exists(experiments_root_dir):
         os.makedirs(experiments_root_dir, exist_ok=True)
-
     experiment_list = sorted(os.listdir(experiments_root_dir))
     if experiment_list:
         experiment_id = str(int(experiment_list[-1]) + 1).zfill(5)

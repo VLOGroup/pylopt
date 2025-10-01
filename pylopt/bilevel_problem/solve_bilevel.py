@@ -8,15 +8,13 @@ from itertools import chain
 from pylopt.bilevel_problem.gradients import ImplicitAutogradFunction, UnrollingAutogradFunction
 from pylopt.bilevel_problem.parameter_groups import get_param_group_name, PARAM_GROUP_NAME_KEY
 from pylopt.callbacks import Callback
-from pylopt.energy.Energy import Energy
-from pylopt.energy.MeasurementModel import MeasurementModel
+from pylopt.energy import Energy, MeasurementModel
 from pylopt.optimise import step_adam, create_projected_optimiser, step_nag
 from pylopt.optimise.optimise_adam import harmonise_param_groups_adam
 from pylopt.optimise.optimise_lbfgs import harmonise_param_groups_lbfgs
 from pylopt.optimise.optimise_nag import harmonise_param_groups_nag
-from pylopt.regularisers.fields_of_experts.FieldsOfExperts import FieldsOfExperts
-from pylopt.regularisers.fields_of_experts.ImageFilter import ImageFilter
-from pylopt.regularisers.fields_of_experts.potential.Potential import Potential
+from pylopt.regularisers import FieldsOfExperts, ImageFilter, Potential
+from pylopt.regularisers.fields_of_experts import compile_regulariser
 from pylopt.scheduler import HyperParamScheduler
 from pylopt.solver.CGSolver import CGSolver
 from pylopt.dataset.dataset_utils import collate_function
@@ -249,33 +247,14 @@ class BilevelOptimisation:
            schedulers = []
 
        regulariser = regulariser.to(device=device, dtype=dtype)
-       # if do_compile:
-       #     train_iter = iter(train_loader)
-       #     batch_0 = next(train_iter).to(dtype=dtype, device=device)
-       #     # NOTE:
-       #     #    > Use default compilation options here - in particular the dynamic shape option.
-       #     #    > Dynamic shapes are important here since the same model is used for training and testing (on full
-       #     #        images!)
-       #     regulariser = compile_regulariser(regulariser, batch_0, dynamic=True)
-
-       # DEBUG:begin
-       # train_iter = iter(train_loader)
-       # batch_0 = next(train_iter).to(dtype=dtype, device=device)
-       # with torch.enable_grad():
-       #     x = batch_0.detach().clone().requires_grad_(True).to(dtype=dtype, device=device)
-       #     y = regulariser.forward(x)
-       #     dy_dx = torch.autograd.grad(inputs=x, outputs=y, create_graph=True)[0]
-       #     grad_nodal = torch.autograd.grad(inputs=[p for p in regulariser.parameters() if p.requires_grad], outputs=y, create_graph=True)[0]
-       #
-       # dy_dx_ = (first_derivative..)
-       #
-       # -> mixed derivative does not exist?? why?
-       #
-       # d2y_dx2 = torch.autograd.grad(inputs=[p for p in regulariser.parameters() if p.requires_grad], outputs=dy_dx, grad_outputs=torch.rand_like(x))
-       #
-       # asdf
-       # DEBUG:end
-
+       if do_compile:
+           train_iter = iter(train_loader)
+           batch_0 = next(train_iter).to(dtype=dtype, device=device)
+           # NOTE:
+           #    > Use default compilation options here - in particular the dynamic shape option.
+           #    > Dynamic shapes are important here since the same model is used for training and testing (on full
+           #        images!)
+           regulariser = compile_regulariser(regulariser, batch_0, dynamic=True)
 
        param_groups = assemble_param_groups_nag(regulariser, **optimisation_options_upper)
        param_groups_ = harmonise_param_groups_nag(param_groups)

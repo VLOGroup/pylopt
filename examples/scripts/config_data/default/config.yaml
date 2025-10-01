@@ -7,7 +7,9 @@ data:
       crop_size: 64
     test:
       root_dir: 'TODO: fill me'
-
+  experiments:
+    root_dir: 'TODO: fill me'
+    
 image_filter:
   filter_dim: 7
   padding: 3

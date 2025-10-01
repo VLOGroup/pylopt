@@ -3,7 +3,7 @@ import torch
 import logging
 import numpy as np
 
-from pylopt.regularisers.fields_of_experts import FieldsOfExperts
+from .FieldsOfExperts import FieldsOfExperts
 from pylopt.utils.Timer import Timer
 
 def warm_up(regulariser: FieldsOfExperts, x: torch.Tensor, num_calls: int = 100) -> None:

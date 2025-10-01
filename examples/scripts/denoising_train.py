@@ -106,14 +106,15 @@ def bilevel_learn(example_id: str) -> None:
         options_lower = {'max_num_iterations': 300, 'rel_tol': 1e-5, 'lip_const': 1e5, 'batch_optimisation': False}
     elif method_lower == 'napg':
         noise_level = config['measurement_model']['noise_level'].get()
-        options_lower = {'max_num_iterations': 300, 'rel_tol': 1e-5, 'lip_const': 1e5,
+        options_lower = {'max_num_iterations': 300, 'rel_tol': 1e-5, 'lip_const': 1e5, 'beta': [0.71],
                          'prox': DenoisingProx(noise_level=noise_level), 'batch_optimisation': False}
     elif method_lower == 'adam':
         options_lower = {'max_num_iterations': 1000, 'rel_tol': 5e-4, 'lr': 1e-3, 'batch_optimisation': True}
     else:
         raise ValueError('Unknown solution method for lower level problem.')
 
-    path_to_eval_dir = create_experiment_dir(config)
+    repo_root_path = get_repo_root_path(Path(__file__))
+    path_to_eval_dir = create_experiment_dir(root_dir=os.path.join(repo_root_path, 'data', 'experiments'))
     bilevel_optimisation = BilevelOptimisation(method_lower, 
                                                options_lower, 
                                                config=config, 
@@ -131,10 +132,10 @@ def bilevel_learn(example_id: str) -> None:
                                  path_to_eval_dir, config=config, evaluation_freq=1, tb_writer=tb_writer)
                 ]
 
-    method_upper = 'adam'
-    max_num_iterations = 1000
+    method_upper = 'nag'
+    max_num_iterations = 30
     if method_upper == 'nag':
-        options_upper = {'max_num_iterations': max_num_iterations, 'lip_const': [1000], 'alternating': True}
+        options_upper = {'max_num_iterations': max_num_iterations, 'lip_const': [1000], 'alternating': True, 'beta': [0.71]}
     elif method_upper == 'adam':
         options_upper = {'max_num_iterations': max_num_iterations, 'lr': [1e-3, 1e-3], 'alternating': True}
     elif method_upper == 'lbfgs':
@@ -144,21 +145,18 @@ def bilevel_learn(example_id: str) -> None:
         raise ValueError('Unknown optimisation method for upper level problem.')
 
     # --- SCHEDULING ---
+    schedulers = []
 
-    # --- Schedulers for upper level optimisation affecting lip_const (NAG)
-    #   
-    # schedulers = [NAGLipConstGuard(lip_const_bound=2 ** 17, lip_const_key='lip_const')]
 
-    # --- Schedulers for upper level optimisation affecting the learning rate (Adam, LBFGS)
-    #
-    schedulers = [CosineAnnealingLRScheduler(step_begin=200, 
-                                             restart_cycle=None,
-                                             step_end=850,
-                                             lr_min=1e-5)]
+    # Schedulers for NAG
+    schedulers += [NAGLipConstGuard(lip_const_bound=2 ** 9, lip_const_key='lip_const')]
 
-    # schedulers = [AdaptiveLRRestartScheduler(restart_condition_gradient_based, warm_up_period=2)]
-    
-
+    # Schedulers for Adam
+    # schedulers += [AdaptiveLRRestartScheduler(restart_condition_gradient_based, warm_up_period=2)]
+    # schedulers += [CosineAnnealingLRScheduler(step_begin=200, 
+    #                                          restart_cycle=None,
+    #                                          step_end=850,
+    #                                          lr_min=1e-5)]    
 
     bilevel_optimisation.learn(regulariser, 
                                lam, 
@@ -168,8 +166,7 @@ def bilevel_learn(example_id: str) -> None:
                                optimisation_options_upper=options_upper,
                                dtype=dtype, device=device, 
                                callbacks=callbacks, 
-                               schedulers=schedulers, 
-                               do_compile=True)
+                               schedulers=schedulers)
 
 def main():
     seed_random_number_generators(123)

@@ -19,17 +19,17 @@ def evaluate_performance():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     dtype = torch.float32
 
-    test_data_root_dir = '/home/florianthaler/Documents/data/image_data/BSDS68_rotated'
+    test_data_root_dir = '/home/florianthaler/Documents/data/image_data/some_images'
     test_image_dataset = TestImageDataset(root_path=test_data_root_dir, dtype=dtype)
     test_loader = DataLoader(test_image_dataset, batch_size=len(test_image_dataset), shuffle=False,
                              collate_fn=lambda x: collate_function(x, crop_size=-1))
 
     repo_root_path = get_repo_root_path(Path(__file__))
-    image_filter = ImageFilter.from_file(os.path.join(repo_root_path, 'data', 'model_data', 'filters_iter_3796.pt'))
-    potential = StudentT.from_file(os.path.join(repo_root_path, 'data', 'model_data', 'potential_iter_3796.pt'))
+    image_filter = ImageFilter.from_file(os.path.join(repo_root_path, 'data', 'model_data', 'filters_7x7_chen-ranftl-pock_2014_scaled.pt'))
+    potential = StudentT.from_file(os.path.join(repo_root_path, 'data', 'model_data', 'potential_iter_100.pt'))
     regulariser = FieldsOfExperts(potential, image_filter)
 
-    lam = 100
+    lam = 10
     noise_level = 0.1
     operator = torch.nn.Identity()
     u_clean = list(test_loader)[0]

@@ -70,6 +70,13 @@ PyLOpt aims to serve as a toolbox for scientists and engineers to address bileve
     pip install pylopt
     ```
 
+  Note that the pip package contains only the CPU supported version of the extension package `quartic_bspline_extension`. To use it
+  with CUDA support, it needs to be built locally:
+    1. Clone the repository from https://github.com/VLOGroup/quartic_bspline_extension
+    2. In the root directory of the repository run `make build`.
+    3. The builds (CPU & CUDA if NVIDIA-capable GPU is detected, CPU only else) are stored in the artefacts subdirectory.
+    4. Install the package using the generated Python wheel by `pip install *artefacts/<package_name>.whl`
+
 - From source
 
     ```
@@ -144,7 +151,7 @@ Concrete and executable code for training and prediction is contained in `pylopt
 
   and, when using the NAG optimiser:
 
-  ![](data/images/results/prediction_I/results.png)
+  ![](data/images/results/prediction/reconstruction_I.png)
 
 
 #### Training of FoE models
@@ -168,15 +175,17 @@ with example_id in {training_I, training_II, training_III}. In the following an 
       - Uniform initialisation
       - Trainable 
   - Lower level: NAPG
-  - Upper level Adam
+  - Upper level NAG with Lipschitz-constant scheduling
 
-  |                   Training stats                   |                Potential weight stats                |                    Test triplet                    |
-  |:--------------------------------------------------:|:----------------------------------------------------:|:--------------------------------------------------:|
-  |  ![](images/results/training_I/training_stats.png) | ![](images/results/training_I/student_t_stats.png)   | ![](images/results/training_I/test_triplets.jpg)   |
+  By employing the NAG optimizer together with NAGLipConstGuard() to solve the upper-level problem, reasonable potentials 
+  can be learned after only a few iterations. Using the Berkeley dataset (BSD300) for training and the images `watercastle` 
+  and `koala` for validation during training, one obtains the following training stats:
 
+  ![](data/images/results/training_I/training_stats.png)
 
 - **Example II** (example_id = training_II)
   - Filters:
+    - Size: 7x7
     - Random initialisation
     - Trainable
   - Potential:
@@ -186,9 +195,26 @@ with example_id in {training_I, training_II, training_III}. In the following an 
       - Trainable
   - Optimiser:
     - Inner: NAPG
-    - Outer: Adam
+    - Outer: Adam with cosine-annealed learning rate scheduling
+
+  After 10,000 iterations, the resulting learned filters and potential functions are as follows:
+
+  ![](data/images/results/training_II/filters_and_potentials_48.png)
 
 - **Example III** ((example_id = training_III))
+
+  - Filters:
+    - Size: 7x7
+    - Random initialisation
+    - Trainable
+  - Potential:
+    - Type: Spline
+    - Weights: 
+      - 
+      - Trainable
+  - Optimiser:
+    - Inner: NAPG
+    - Outer: 
 
 ## Contributing
 
