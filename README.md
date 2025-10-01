@@ -2,8 +2,8 @@
 
 PyLOpt is a PyTorch-based library for learning hyperparameters $\theta$ within the context of image reconstruction by means of solving the bilevel problem
 
-$$(P_\text{bilevel}) ~~~~~\inf_{\theta} F(u^{*}(\theta), u^{(0)}) ~~~ \text{s.t.}  
-    ~~~ u^{*}(\theta)\in\mathop{\text{arginf}}_{u}E(u, u^{(\delta)}, \theta)$$
+$$(P_\text{bilevel}) ~~~~~\inf_{\theta} F(u(\theta), u^{(0)}) ~~~ \text{s.t.}  
+    ~~~ u(\theta)\in\mathop{\text{arginf}}_{u}E(u, u^{(\delta)}, \theta)$$
 
 The function $F$ refers to the upper loss function quantifying the goodness of the learned $\theta$ w.r.t. groundtruth data $u^{(0)}$. $E$ denotes the lower cost or energy function, which is used to reconstruct clean data $u^{(0)}$ from noisy observations $u^{(\delta)}$. We assume that $E$ is of the form
 
@@ -110,8 +110,8 @@ bilevel_optimisation = BilevelOptimisation(method_lower='napg',
 
 bilevel_optimisation.learn(regulariser, lam, l2_loss_func, train_image_dataset,
                            optimisation_method_upper='adam', 
-                           optimisation_options_upper={'max_num_iterations': 15000, 'lr': [1e-3, 1e-1], 
-                                                       'parameterwise': True},
+                           optimisation_options_upper={'max_num_iterations': 10000, 'lr': [1e-3, 1e-1], 
+                                                       'alternating': True},
                            dtype=dtype, device=device, callbacks=callbacks, schedulers=schedulers)
 
 ```
@@ -138,9 +138,9 @@ Concrete and executable code for training and prediction is contained in `pylopt
 
   | Method  | Options                                                                                                         | mean PSNR [dB] | Iter | Time [s] on GPU |
   |:-------:|:----------------------------------------------------------------------------------------------------------------|:--------------:|:----:|:---------------:|
-  |  'nag'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'batch_optimisation': False, 'lip_const': 1e1} ```            | 29.199395      | 312  | 0.988           |
-  | 'napg'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'prox': ..., 'batch_optimisation': False, 'lip_const': 1} ``` | 29.207625      | 361  | 1.577           |
-  | 'adam'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'lr': [1e-3, 1e-3], 'batch_optimisation': False} ```          | 28.83305       | 1000 | 1.667           |
+  |  'nag'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'batch_optimisation': False, 'lip_const': 1e1} ```            | 29.199         | 312  | 0.988           |
+  | 'napg'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'prox': ..., 'batch_optimisation': False, 'lip_const': 1} ``` | 29.207         | 361  | 1.577           |
+  | 'adam'  | ``` {'max_num_iterations': 1000, 'rel_tol': 1e-5, 'lr': [1e-3, 1e-3], 'batch_optimisation': False} ```          | 28.833         | 1000 | 1.667           |
 
   and, when using the NAG optimiser:
 
@@ -149,58 +149,46 @@ Concrete and executable code for training and prediction is contained in `pylopt
 
 #### Training of FoE models
 
-- **Example I**
+The script `denoising_train.py` contains several setups for training filters and/or potential functions. To run the script with the corresponding
+setup, ececute 
+
+```
+python examples/scripts/denoising_train.py --example <example_id>
+```
+
+with example_id in {training_I, training_II, training_III}. In the following an overview of these examples is presented.
+
+- **Example I** (example_id = training_I)
   - Filters: 
     - Pretrained filters from [[1]](#1)
-    - Non-trainable
+    - Frozen, e.g. non-trainable
   - Potential: 
     - Type: Student-t
     - Weights:
       - Uniform initialisation
       - Trainable 
-  - Lower level 
-  - Upper level
-  To run the training script, execute   
-
-    ```
-    python examples/scripts/denoising_train.py --configs example_training_I 
-    ```
+  - Lower level: NAPG
+  - Upper level Adam
 
   |                   Training stats                   |                Potential weight stats                |                    Test triplet                    |
   |:--------------------------------------------------:|:----------------------------------------------------:|:--------------------------------------------------:|
   |  ![](images/results/training_I/training_stats.png) | ![](images/results/training_I/student_t_stats.png)   | ![](images/results/training_I/test_triplets.jpg)   |
 
-  Note that already after very iterations, we obtain a notable denoising performance. The main 
-  reason for this behaviour is the nearly optimal initialisation of the filters. 
 
-- **Example II**
+- **Example II** (example_id = training_II)
   - Filters:
-    - Pretrained filters from [[1]](#1)
+    - Random initialisation
     - Trainable
   - Potential:
     - Type: Student-t
     - Weights: 
       - Uniform initialisation
-      - Trainable    
-  - Inner energy: `OptimisationEnergy`
+      - Trainable
   - Optimiser:
-    - Inner: NAGOptimiser
-    - Outer: NAGOptimiser
-  
-  To run the corresponding training script, execute  
+    - Inner: NAPG
+    - Outer: Adam
 
-  ```
-  python examples/scripts/denoising_train.py --configs example_training_II
-  ```
-
-  The training results are consistent with the results obtained in Example I. Notably, although the filters 
-  are trainable, their $l^{2}$-norm remains nearly constant throughout the training process:
-
-  |                   Training stats                   |                   Filter stats                    |               Student-t potential                |
-  |:--------------------------------------------------:|:-------------------------------------------------:|:------------------------------------------------:|
-  | ![](images/results/training_II/training_stats.png) |  ![](images/results/training_II/filter_stats.png) | ![](images/results/training_II/potentials.png)   |
-
-
+- **Example III** ((example_id = training_III))
 
 ## Contributing
 
@@ -253,5 +241,5 @@ Paszke, A., Gross, S., Massa, F., Lerer, A., Bradbury, J., Chanan, G., Killeen, 
 
 ## License
 
-~~~~MIT License~~~~
+MIT License
 
