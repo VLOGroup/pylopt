@@ -17,9 +17,10 @@ from pylopt.utils.logging_utils import setup_logger
 from pylopt.utils.seeding_utils import seed_random_number_generators
 from pylopt.utils.Timer import Timer
 
-PRETRAINED_FILTER_MODELS = {'chen-ranftl-pock_2014_scaled_7x7': 'foe_filters_7x7_chen-ranftl-pock_2014_scaled.pt', 
-                            'thaler-pock_7x7': ''}
-PRETRAINED_POTENTIAL_MODELS = {'thaler_2025_student_t': 'student_t_potential_thaler_2025.pt'}
+PRETRAINED_FILTER_MODELS = {'chen-ranftl-pock_2014_scaled_7x7': 'filters_7x7_chen-ranftl-pock_2014_scaled.pt', 
+                            'pylopt_7x7_2025_I': 'filters_7x7_pylopt_2025_II.pt'}
+PRETRAINED_POTENTIAL_MODELS = {'student_t_pylopt_I': 'student_t_potential_pylopt_2025_I.pt',
+                               'student_t_pylopt_II': 'student_t_potential_pylopt_2025_II.pt'}
 
 def visualise_denoising_results(u_clean: torch.Tensor, u_noisy: torch.Tensor, u_denoised: torch.Tensor) -> None:
     u_clean_splits = torch.split(u_clean, split_size_or_sections=1, dim=0)
@@ -71,7 +72,7 @@ def denoise() -> None:
                              collate_fn=lambda x: collate_function(x, crop_size=-1))
 
     image_filter = ImageFilter.from_file(os.path.join(root_path, 'data', 'model_data', PRETRAINED_FILTER_MODELS['chen-ranftl-pock_2014_scaled_7x7']))
-    potential = StudentT.from_file(os.path.join(os.getcwd(), 'data', 'model_data', PRETRAINED_POTENTIAL_MODELS['thaler_2025_student_t']))
+    potential = StudentT.from_file(os.path.join(os.getcwd(), 'data', 'model_data', PRETRAINED_POTENTIAL_MODELS['student_t_pylopt_I']))
 
     regulariser = FieldsOfExperts(potential, image_filter)
 
