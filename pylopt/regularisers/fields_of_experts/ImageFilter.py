@@ -201,9 +201,11 @@ class ImageFilter(torch.nn.Module):
             'enable': config['image_filter']['orthogonality']['enable'].get(),
             'max_num_iterations': config['image_filter']['orthogonality']['max_num_iterations'].get()
         }
-
-        return cls(filter_dim, padding, padding_mode, initialisation_mode, multiplier, trainable,
-                   orthogonality_options, normalise)
+        init_options = {'mode': initialisation_mode, 'multiplier': multiplier, 'normalise': normalise}
+        apply_unit_ball_projection = config['image_filter']['apply_unit_ball_projection'].get()
+        
+        return cls(filter_dim, padding, padding_mode, init_options, 
+                   orthogonality_options, apply_unit_ball_projection, trainable)
 
     @classmethod
     def from_file(cls, path_to_model: str, device: torch.device=torch.device('cpu')) -> Self:
@@ -223,11 +225,13 @@ class ImageFilter(torch.nn.Module):
         padding = initialisation_dict.get('padding', 3)
         padding_mode = initialisation_dict.get('padding_mode', 'reflect')
         orthogonality_options = initialisation_dict.get('orthogonality_options', {})
+        apply_unit_ball_projection = initialisation_dict.get('apply_unit_ball_projection', False)
 
         image_filter = cls(filter_dim=filter_dim,
                            padding=padding,
                            padding_mode=padding_mode,
-                           orthogonality_options=orthogonality_options)
+                           orthogonality_options=orthogonality_options, 
+                           apply_unit_ball_projection=apply_unit_ball_projection)
         image_filter.load_state_dict(state_dict, strict=True)
         return image_filter
 
@@ -256,6 +260,7 @@ class ImageFilter(torch.nn.Module):
         return {'filter_dim': self.filter_dim,
                 'padding': self.padding,
                 'padding_mode': self.padding_mode,
+                'apply_unit_ball_projection': self.apply_unit_ball_projection,
                 'orthogonality_options': self.orthogonality_options}
 
     def save(self, path_to_model_dir: str, model_name: str='filters') -> str:

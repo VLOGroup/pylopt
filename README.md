@@ -2,8 +2,8 @@
 
 PyLOpt is a PyTorch-based library for learning hyperparameters $\theta$ within the context of image reconstruction by means of solving the bilevel problem
 
-$$(P_\text{bilevel}) ~~~~~\inf_{\theta} F(u(\theta), u^{(0)}) ~~~ \text{s.t.}  
-    ~~~ u(\theta)\in\mathop{\text{arginf}}_{u}E(u, u^{(\delta)}, \theta)$$
+$$(P_\text{bilevel}) ~~~~~\inf_{\theta} F(u_{\theta}, u^{(0)}) ~~~ \text{s.t.}  
+    ~~~ u_{\theta}\in\mathop{\text{arginf}}_{u}E(u, u^{(\delta)}, \theta)$$
 
 The function $F$ refers to the upper loss function quantifying the goodness of the learned $\theta$ w.r.t. groundtruth data $u^{(0)}$. $E$ denotes the lower cost or energy function, which is used to reconstruct clean data $u^{(0)}$ from noisy observations $u^{(\delta)}$. We assume that $E$ is of the form
 

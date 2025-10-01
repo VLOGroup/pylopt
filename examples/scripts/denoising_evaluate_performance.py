@@ -1,44 +1,44 @@
 import torch
 from torch.utils.data import DataLoader
-from confuse import Configuration
-import argparse
+from pathlib import Path
+import os
 
 from pylopt.dataset.ImageDataset import TestImageDataset
-from pylopt.energy import Energy
-from pylopt.fields_of_experts import FieldsOfExperts
-from pylopt.filters import ImageFilter
+from pylopt.energy import Energy, MeasurementModel
+from pylopt.regularisers.fields_of_experts import FieldsOfExperts, ImageFilter, StudentT
 from pylopt.lower_problem import solve_lower
-from pylopt.measurement_model import MeasurementModel
-from pylopt.potential import StudentT
 from pylopt.proximal_maps.ProximalOperator import DenoisingProx
-from pylopt.utils.config_utils import load_app_config, parse_datatype
 from pylopt.dataset.dataset_utils import collate_function
+from pylopt.utils.file_system_utils import get_repo_root_path
 from pylopt.utils.evaluation_utils import compute_psnr
 from pylopt.utils.logging_utils import setup_logger
 from pylopt.utils.seeding_utils import seed_random_number_generators
 from pylopt.utils.Timer import Timer
 
-def evaluate_performance(config: Configuration):
+def evaluate_performance():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-    dtype = parse_datatype(config)
+    dtype = torch.float32
 
-    test_data_root_dir = config['data']['dataset']['test']['root_dir'].get()
+    test_data_root_dir = '/home/florianthaler/Documents/data/image_data/BSDS68_rotated'
     test_image_dataset = TestImageDataset(root_path=test_data_root_dir, dtype=dtype)
     test_loader = DataLoader(test_image_dataset, batch_size=len(test_image_dataset), shuffle=False,
                              collate_fn=lambda x: collate_function(x, crop_size=-1))
 
-    image_filter = ImageFilter(config)
-    potential = StudentT(image_filter.get_num_filters(), config)
+    repo_root_path = get_repo_root_path(Path(__file__))
+    image_filter = ImageFilter.from_file(os.path.join(repo_root_path, 'data', 'model_data', 'filters_iter_3796.pt'))
+    potential = StudentT.from_file(os.path.join(repo_root_path, 'data', 'model_data', 'potential_iter_3796.pt'))
     regulariser = FieldsOfExperts(potential, image_filter)
 
+    lam = 100
+    noise_level = 0.1
+    operator = torch.nn.Identity()
     u_clean = list(test_loader)[0]
     u_clean = u_clean.to(device=device, dtype=dtype)
-    measurement_model = MeasurementModel(u_clean, config=config)
-    lam = config['energy']['lam'].get()
+    measurement_model = MeasurementModel(u_clean, operator=operator, noise_level=noise_level)
+    
     energy = Energy(measurement_model, regulariser, lam)
     energy.to(device=device, dtype=dtype)
 
-    noise_level = config['measurement_model']['noise_level'].get()
     prox = DenoisingProx(noise_level=noise_level)
     options_napg = {'max_num_iterations': 1000, 'rel_tol': 1e-7, 'prox': prox, 'batch_optimisation': False}
 
@@ -60,20 +60,7 @@ def main():
 
     log_dir_path = './data'
     setup_logger(data_dir_path=log_dir_path, log_level_str='info')
-
-    # specify config directory via command line argument
-    #   1. Usage of custom configuration contained in bilevel_optimisation.config_data.custom
-    #       python example_denoising_predict.py --configs example_prediction_I
-    #   2. Usage of custom configuration in file system
-    #       python example_denoising_predict.py --configs <path_to_custom_config_dir>
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--configs')
-    args = parser.parse_args()
-    app_name = 'bilevel_optimisation'
-    configuring_module = '[DENOISING] evaluate'
-    config = load_app_config(app_name, args.configs, configuring_module)
-
-    evaluate_performance(config)
+    evaluate_performance()
 
 if __name__ == '__main__':
     main()

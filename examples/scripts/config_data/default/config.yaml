@@ -7,10 +7,6 @@ data:
       crop_size: 64
     test:
       root_dir: 'TODO: fill me'
-  models:
-    root_dir: ''                  # if not specified, 'bilevel_optimisation/model_data' is used to load models from
-  experiments:
-    root_dir: ''
 
 image_filter:
   filter_dim: 7
@@ -23,6 +19,7 @@ image_filter:
     mode: 'dct'
     multiplier: 1.0
     normalise: False
+  apply_unit_ball_projection: False
   trainable: False
 
 potential:

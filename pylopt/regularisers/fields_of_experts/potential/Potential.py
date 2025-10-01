@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 import torch
 from typing import Dict, Any, Self
 from confuse import Configuration
+import os
 
 class Potential(ABC, torch.nn.Module):
     """
@@ -55,3 +56,9 @@ class Potential(ABC, torch.nn.Module):
     @abstractmethod
     def forward(self, x: torch.Tensor, reduce: bool=True) -> torch.Tensor:
         pass
+
+    @staticmethod
+    def save(data_dict: Dict[str, Any], path_to_model_dir: str, model_name: str) -> str:
+        path_to_model = os.path.join(path_to_model_dir, '{:s}.pt'.format(os.path.splitext(model_name)[0]))
+        torch.save(data_dict, path_to_model)
+        return path_to_model

@@ -5,7 +5,7 @@ clean:
 	rm -rf build/ dist/ *.egg-info .pytest_cache
 
 build: 
-	python -m build --wheel --outdir artefacts
+	python -m build --outdir artefacts
 
 install: clean
 	python setup.py install

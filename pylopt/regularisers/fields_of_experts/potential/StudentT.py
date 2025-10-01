@@ -1,5 +1,5 @@
 import os.path
-from typing import Dict, Any, Self
+from typing import Dict, Any, Self, Optional
 import torch
 from confuse import Configuration
 
@@ -7,25 +7,47 @@ from . import Potential
 
 class StudentT(Potential):
     """
-    Class implementing student-t potential for the usage in context of FoE models.    """
-
+    Class implementing student-t potential for the usage in context of FoE models.
+    """
     def __init__(
             self,
-            num_marginals: int=48,
-            initialisation_mode: str='uniform',
-            multiplier: float=1.0,
+            num_marginals: int,
+            init_options: Optional[Dict[str, Any]]=None,
             trainable: bool=True
     ) -> None:
+        """
+        Initialisation of class StudentT
+
+        NOTE
+        ----
+            > It is not checked whether number of filters and number of potentials coincide.
+
+        :param num_marginals: Number of potentials - per design it must coincide
+            with the number of filters.
+        :param init_options: Dictionary of initialisation options. Keys:
+            - 'mode': String indicating how potentials weights are initialised: 'rand', 'uniform'
+            - 'multiplier': Float used as initial scaling factor
+            Defaults to None
+        :param trainable: Boolean flag indicating if potentials are trainable; defaults to True
+        """
         super().__init__(num_marginals)
 
-        weight_data = self._init_weight_tensor(num_marginals, initialisation_mode, multiplier)
+        default_init = {
+            'mode': 'uniform', 
+            'multiplier': 1.0
+        }
+        self.init_options = {**default_init, **(init_options or {})}
+
+        weight_data = self._init_weight_tensor(num_marginals, self.init_options)
         self.weight_tensor = torch.nn.Parameter(data=weight_data, requires_grad=trainable)
 
     @staticmethod
-    def _init_weight_tensor(num_marginals: int, initialisation_mode: str, multiplier: float) -> torch.Tensor:
-        if initialisation_mode == 'rand':
+    def _init_weight_tensor(num_marginals: int, init_options: Dict[str, Any]) -> torch.Tensor:
+        multiplier = init_options['multiplier']
+
+        if init_options['mode'] == 'rand':
             weight_data = torch.log(multiplier * torch.rand(num_marginals))
-        elif initialisation_mode == 'uniform':
+        elif init_options['mode'] == 'uniform':
             weight_data = torch.log(multiplier * torch.ones(num_marginals))
         else:
             raise ValueError('Unknown initialisation method')
@@ -42,12 +64,6 @@ class StudentT(Potential):
 
     def forward(self, x: torch.Tensor, reduce: bool=True) -> torch.Tensor:
         if reduce:
-            # NOTE
-            #   > mapping filter responses with arctan to (-1, 1) improves image reconstruction
-            #       drastically. Why? Is it legitimate to introduce this transformation?
-
-            # return torch.einsum('bfhw,f->', torch.log(1.0 + (torch.arctan(x) * 2 / torch.pi) ** 2), torch.exp(self.weight_tensor))
-
             return torch.einsum('bfhw,f->', torch.log(1.0 + x ** 2), torch.exp(self.weight_tensor))
         else:
             return torch.einsum('bfhw,f->bfhw', torch.log(1.0 + x ** 2), torch.exp(self.weight_tensor))
@@ -74,12 +90,10 @@ class StudentT(Potential):
         multiplier = config['potential']['student_t']['initialisation']['multiplier'].get()
         trainable = config['potential']['student_t']['trainable'].get()
 
-        return cls(num_marginals, initialisation_mode, multiplier, trainable)
+        init_options = {'mode': initialisation_mode, 'multiplier': multiplier}
+        return cls(num_marginals, init_options, trainable)
 
     def save(self, path_to_model_dir: str, model_name: str='student_t') -> str:
-        path_to_model = os.path.join(path_to_model_dir, '{:s}.pt'.format(os.path.splitext(model_name)[0]))
         potential_dict = {'initialisation_dict': self.initialisation_dict(),
                           'state_dict': self.state_dict()}
-
-        torch.save(potential_dict, path_to_model)
-        return path_to_model
+        return Potential.save(potential_dict, path_to_model_dir, model_name)

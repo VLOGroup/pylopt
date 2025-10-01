@@ -237,16 +237,36 @@ class TrainingMonitor(Callback):
     TENSORBOARD_TAGS = {'loss': 'loss/train', 'test_loss': 'loss/test', 'test_psnr': 'test_psnr'}
     HYPERPARAM_KEYS = {LIP_CONST_KEY, LR_KEY}
 
-    def __init__(self, dataset: Dataset, config: Configuration, method: str, options: Dict[str, Any],
-                 loss_func: Callable, path_to_data_dir: str, evaluation_freq: int=2,
+    def __init__(self, 
+                 dataset: Dataset, 
+                 method_lower: str, 
+                 options_lower: Dict[str, Any],
+                 loss_func: Callable, 
+                 path_to_data_dir: str, 
+                 operator: Optional[torch.nn.Module]=None, 
+                 noise_level: Optional[float]=None,
+                 lam: Optional[float]=None,
+                 config: Optional[Configuration]=None,
+                 evaluation_freq: int=2,
                  tb_writer: Optional[SummaryWriter]=None) -> None:
         super().__init__()
         self.test_loader = DataLoader(dataset, batch_size=len(dataset), shuffle=False,
                                  collate_fn=lambda x: collate_function(x, crop_size=-1))
 
-        self.config = config
-        self.method = method
-        self.options = options
+        if config is not None:
+            operator_name = config['measurement_model']['forward_operator'].get()
+            self.operator = getattr(torch.nn, operator_name)()
+            self.noise_level = config['measurement_model']['noise_level'].get()
+            self.lam = config['energy']['lam'].get()
+        elif noise_level is not None and operator is not None and lam is not None:
+            self.operator = operator
+            self.noise_level = noise_level
+            self.lam = lam
+        else:
+            raise ValueError('Must provide config or, operator, noise_level and lam.')
+
+        self.method_lower = method_lower
+        self.options_lower = options_lower
         self.loss_func = loss_func
 
         self.path_to_data_dir = path_to_data_dir
@@ -324,15 +344,16 @@ class TrainingMonitor(Callback):
             if fitness:
                 stats.update({'fitness': fitness})
 
-            # TODO:
-            #   > does this work as expected for all kind of potentials?
-            #   > works fine for student-t potential
-            potential_param = regulariser.potential.get_parameters().detach().cpu().numpy()
-            self.potential_params_list.append(potential_param)
             if self.tb_writer:
-                self.tb_writer.add_scalars('potentials/weights',
-                                           {'potential_{:d}'.format(i): np.exp(potential_param[i])
-                                            for i in range(0, len(potential_param))}, step + 1)
+                potential_param = regulariser.potential.get_parameters().detach().cpu().numpy()
+                if potential_param.ndim == 1:
+                    potential_param_norms = np.exp(potential_param)
+                else:
+                    potential_param_norms = np.linalg.norm(np.exp(potential_param), 
+                                                           axis=tuple(range(1, potential_param.ndim)))
+                self.tb_writer.add_scalars('potentials/weight_norms',
+                                           {'potential_{:d}'.format(i): potential_param_norms[i]
+                                            for i in range(0, len(potential_param_norms))}, step + 1)
 
         self.training_stats_dict_list.append(stats)
 
@@ -342,7 +363,6 @@ class TrainingMonitor(Callback):
         test_loss_list = df['test_loss'].dropna().to_list()
         test_psnr_list = df['test_psnr'].dropna().to_list()
         self._visualise_training_stats(train_loss_list, test_loss_list, test_psnr_list)
-
 
         self._visualise_hyperparam_stats()
 
@@ -403,13 +423,13 @@ class TrainingMonitor(Callback):
             test_batch_clean = list(self.test_loader)[0]
             test_batch_clean_ = test_batch_clean.to(device=device, dtype=dtype)
 
-            measurement_model = MeasurementModel(test_batch_clean_, config=self.config)
-            energy = Energy(measurement_model, regulariser, self.config['energy']['lam'].get())
+            measurement_model = MeasurementModel(test_batch_clean_, self.operator, self.noise_level)
+            energy = Energy(measurement_model, regulariser, self.lam)
             energy.to(device=device, dtype=dtype)
 
             test_batch_noisy = measurement_model.get_noisy_observation()
             with Timer(device) as t:
-                test_batch_denoised = solve_lower(energy, self.method, self.options).solution
+                test_batch_denoised = solve_lower(energy, self.method_lower, self.options_lower).solution
 
             psnr = torch.mean(compute_psnr(energy.measurement_model.get_clean_data(), test_batch_denoised))
             psnr = psnr.detach().cpu().item()
