@@ -127,10 +127,6 @@ class BilevelOptimisation:
                 a configuration object of type Configuration.
             > If a configuation object is provided, the config values are written to file.
 
-        TODO
-        ----
-            > Make class completely configurable by config.
-
         :param method_lower: String indicating the solution method for the lower level problem.
         :param options_lower: Dictionary of options for the solution of the lower level problem
         :param operator: PyTorch module representing the forward operator
@@ -164,6 +160,9 @@ class BilevelOptimisation:
             else path_to_experiments_dir
 
         self.backward_mode = differentiation_method
+        if differentiation_method == 'unrolling' and 'unrolling' not in method_lower:
+            raise ValueError('When using unrolling scheme for upper-level optimisation, an ' \
+            'adequate lower-level solution method has to be chosen.')
 
         self.method_lower = method_lower
         self.options_lower = options_lower

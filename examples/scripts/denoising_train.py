@@ -111,6 +111,8 @@ def bilevel_learn(example_id: str) -> None:
                          'prox': DenoisingProx(noise_level=noise_level), 'batch_optimisation': False}
     elif method_lower == 'adam':
         options_lower = {'max_num_iterations': 1000, 'rel_tol': 5e-4, 'lr': 1e-3, 'batch_optimisation': True}
+    elif method_lower == 'nag_unrolling':
+        options_lower = {'max_num_iterations': 50, 'rel_tol': 1e-5, 'lip_const': 1e5, 'batch_optimisation': False, 'beta': [0.71]}
     else:
         raise ValueError('Unknown solution method for lower level problem.')
 
@@ -133,12 +135,12 @@ def bilevel_learn(example_id: str) -> None:
                                  path_to_eval_dir, config=config, evaluation_freq=1, tb_writer=tb_writer)
                 ]
 
-    method_upper = 'nag'
+    method_upper = 'adam'
     max_num_iterations = 30
     if method_upper == 'nag':
         options_upper = {'max_num_iterations': max_num_iterations, 'lip_const': [1000], 'alternating': True, 'beta': [0.71]}
     elif method_upper == 'adam':
-        options_upper = {'max_num_iterations': max_num_iterations, 'lr': [1e-3, 1e-3], 'alternating': True}
+        options_upper = {'max_num_iterations': max_num_iterations, 'lr': [1e-1], 'alternating': True}
     elif method_upper == 'lbfgs':
         options_upper = {'max_num_iterations': max_num_iterations, 'max_iter': 10, 'history_size': 10,
                          'line_search_fn': 'strong_wolfe'}
