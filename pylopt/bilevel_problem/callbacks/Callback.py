@@ -316,8 +316,8 @@ class TrainingMonitor(Callback):
                         if not key in self.hyperparam_dict[name]:
                             self.hyperparam_dict[name][key] = []
 
-                        logging.info('[{:s}] {:s} for group {:s}: '
-                                     '{:.3f}'.format(self.__class__.__name__, key, name, hparam))
+                        logging.info('[{:s}]   > {:s} for group {:s}: {:.3f}'.format(self.__class__.__name__, 
+                                                                                     key, name, hparam))
                         self.hyperparam_dict[name][key].append(hparam)
                         if self.tb_writer:
                             self.tb_writer.add_scalar('{:s}/{:s}'.format(key, name), hparam, step + 1)

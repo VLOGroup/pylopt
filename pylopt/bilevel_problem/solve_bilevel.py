@@ -7,7 +7,8 @@ from itertools import chain
 
 from pylopt.bilevel_problem.gradients import ImplicitAutogradFunction, UnrollingAutogradFunction
 from pylopt.bilevel_problem.parameter_groups import get_param_group_name, PARAM_GROUP_NAME_KEY
-from pylopt.callbacks import Callback
+from pylopt.bilevel_problem.callbacks import Callback
+from pylopt.bilevel_problem.scheduler import HyperParamScheduler
 from pylopt.energy import Energy, MeasurementModel
 from pylopt.optimise import step_adam, create_projected_optimiser, step_nag
 from pylopt.optimise.optimise_adam import harmonise_param_groups_adam
@@ -15,7 +16,6 @@ from pylopt.optimise.optimise_lbfgs import harmonise_param_groups_lbfgs
 from pylopt.optimise.optimise_nag import harmonise_param_groups_nag
 from pylopt.regularisers import FieldsOfExperts, ImageFilter, Potential
 from pylopt.regularisers.fields_of_experts import compile_regulariser
-from pylopt.scheduler import HyperParamScheduler
 from pylopt.solver.CGSolver import CGSolver
 from pylopt.dataset.dataset_utils import collate_function
 from pylopt.utils.file_system_utils import create_experiment_dir, dump_configs, \

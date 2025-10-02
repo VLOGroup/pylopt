@@ -7,7 +7,7 @@ from pylopt.dataset.ImageDataset import TestImageDataset
 from pylopt.energy import Energy, MeasurementModel
 from pylopt.regularisers.fields_of_experts import FieldsOfExperts, ImageFilter, StudentT
 from pylopt.lower_problem import solve_lower
-from pylopt.proximal_maps.ProximalOperator import DenoisingProx
+from pylopt.optimise.proximal_maps.ProximalOperator import DenoisingProx
 from pylopt.dataset.dataset_utils import collate_function
 from pylopt.utils.file_system_utils import get_repo_root_path
 from pylopt.utils.evaluation_utils import compute_psnr

@@ -1,6 +1,8 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any, Optional, Callable
+from typing import List, Dict, Any, Optional, Callable, Tuple
 from math import cos, pi
+import copy
+import logging
 
 from pylopt.bilevel_problem.parameter_groups import PARAM_GROUP_NAME_KEY
 from pylopt.optimise import LIP_CONST_KEY
@@ -17,6 +19,8 @@ class HyperParamScheduler(ABC):
     @abstractmethod
     def step(self, **kwargs: Dict[str, Any]) -> None:
         pass
+
+# --- SCHEDULERS FOR Adam ---
 
 class AdaptiveLRRestartScheduler(HyperParamScheduler):
     """
@@ -82,6 +86,7 @@ class AdaptiveLRRestartScheduler(HyperParamScheduler):
         if self.condition_func(self.param_groups, **kwargs) and self.step_counter >= self.warm_up_period:
             self.num_bad_iterations += 1
             if self.num_bad_iterations == self.patience:
+                logging.info('[{:s}] Perform restart'.format(self.__class__.__name__, ))
                 self._perform_restart()
                 self.num_bad_iterations = 0
 
@@ -148,6 +153,17 @@ class CosineAnnealingLRScheduler(HyperParamScheduler):
             self.steps_since_restart_counter += 1
             self._update_param_group()
 
+# --- SCHEDULERS FOR NAG ---
+
+def find_param_group(param_groups, group_name: str) -> Tuple[int, Optional[Dict[str, Any]]]:
+    group = None
+    group_idx = -1
+    for idx, grp in enumerate(param_groups):
+        if hasattr(grp, PARAM_GROUP_NAME_KEY) and getattr(grp, PARAM_GROUP_NAME_KEY) == group_name:
+            group = grp
+            group_idx = idx
+    return group_idx, group
+
 class AdaptiveNAGRestartScheduler(HyperParamScheduler):
 
     def __init__(self, 
@@ -156,12 +172,30 @@ class AdaptiveNAGRestartScheduler(HyperParamScheduler):
                  patience: int=10,
                  lip_const_key: str=LIP_CONST_KEY,
                  beta_key: str='beta',              # momentum parameter
-                 theta_key: str='theta'             # parameter use to compute momentum parameter
+                 theta_key: str='theta',            # parameter used to compute momentum parameter
+                 history_key: str='history',
+                 group_name: Optional[str]=None
     ) -> None:
         super().__init__()
 
         self.condition_func = condition_func
+
         self.lip_const_key = lip_const_key
+        self.beta_key = beta_key
+        self.theta_key = theta_key
+        self.history_key = history_key
+        
+        # NOTE
+        #   > if group_name == 'all', all the trainable parameter groups will
+        #       be considered for scheduling. restarts will be performed 
+        #       for all the groups, e.g. if number of parameter groups is 2 f.e., 
+        #       and restart condition is satisfied, the values of both of
+        #       the parameter groups will be reset.
+        self.group_name = group_name if group_name is not None else 'all'
+
+        self.warm_up_period = warm_up_period
+        self.patience = patience
+        self.num_bad_iterations = 0
 
         self.param_groups = None
         self.base_values = None
@@ -171,15 +205,21 @@ class AdaptiveNAGRestartScheduler(HyperParamScheduler):
 
         self.base_values = []
         for group in param_groups:
-            self.base_values.append({self.lip_const_key: group.get(self.lip_const_key, None)})
+            group_base_val_dict = {}
+            for key in [self.lip_const_key, self.beta_key, self.theta_key]:
+                # NOTE
+                #   > Values of dict are lists of floats.
+                group_base_val_dict[key] = copy.deepcopy(group.get(key, None))
+            self.base_values.append(group_base_val_dict)
 
-    def _perform_restart() -> None:
-
-        # reset lip_const
-        # refresh history
-        # reset momentum parameters
-        for idx, group in enumerate(self.param_groups):
-            pass
+    def _perform_restart(self, group: Dict[str, Any], group_idx: int) -> None:
+        for key in [self.lip_const_key, self.beta_key, self.theta_key]:
+            if key in group.keys() and self.base_values[group_idx][key] is not None:
+                group[key] = copy.deepcopy(self.base_values[group_idx][key])
+            
+        # reset history
+        if self.history_key in group.keys():
+            group[self.history_key] = [p.detach().clone() for p in group['params']]
 
     def step(self, **kwargs) -> None:
         self.step_counter += 1
@@ -187,14 +227,18 @@ class AdaptiveNAGRestartScheduler(HyperParamScheduler):
         if self.condition_func(self.param_groups, **kwargs) and self.step_counter >= self.warm_up_period:
             self.num_bad_iterations += 1
             if self.num_bad_iterations == self.patience:
-                self._perform_restart()
-                self.num_bad_iterations = 0
+                logging.info('[{:s}] Perform restart of NAG optimiser'.format(self.__class__.__name__, ))
+                if self.group_name == 'all':
+                    for idx, group in enumerate(self.param_groups):
+                        self._perform_restart(group, idx)
+                else:
+                    idx, group = find_param_group(self.param_groups, self.group_name)
+                    if group is None:
+                        raise ValueError('There is no parameter group with name {:s}'.format(self.group_name))
+                    self._perform_restart(group, idx)
 
-        # if self.step_counter % self.restart_freq == 0:
-        #     for idx, group in enumerate(self.param_groups):
-        #         for key in self.base_values[idx]:
-        #             if key in group.keys():
-        #                 group[key] = self.base_values[idx].get(key, group[key])
+                # reset counter after performing restart
+                self.num_bad_iterations = 0
 
 class NAGLipConstGuard(HyperParamScheduler):
     """
@@ -202,14 +246,18 @@ class NAGLipConstGuard(HyperParamScheduler):
     group is larger than a specified bound, it will set to 0.5 times this upper bound. Per default all parameter
     groups will be affected.
     """
-    def __init__(self, lip_const_bound: float, lip_const_key: str=LIP_CONST_KEY,
-                 group_name: Optional[str]=None) -> None:
+    def __init__(self, 
+                 lip_const_bound: float, 
+                 lip_const_key: str=LIP_CONST_KEY,
+                 group_name: Optional[str]=None
+    ) -> None:
         """
         Initialisation of Lipschitz constant guard
 
         :param lip_const_bound: Upper bound of Lipschitz constant
         :param lip_const_key: Key of Lipschitz constant within parameter group.
-        :param group_name:
+        :param group_name: String indicating which parameter group is affected
+            by the scheduling. Per default, scheduling is applied to all parameter groups.
         """
         super().__init__()
 
@@ -239,6 +287,7 @@ class NAGLipConstGuard(HyperParamScheduler):
         :return: Updated parameter group.
         """
         if self.lip_const_key in group.keys():
+            logging.info('[{:s}] Update Lipschitz-constant'.format(self.__class__.__name__, ))
             group[self.lip_const_key] = [min(0.5 * self.lip_const_bound, item) for item in group[self.lip_const_key]]
         return group
 
@@ -249,7 +298,7 @@ class NAGLipConstGuard(HyperParamScheduler):
             for group in self.param_groups:
                 self._update_lip_const(group)
         else:
-            group = self._find_param_group(self.group_name)
+            _, group = find_param_group(self.param_groups, self.group_name)
             if group is None:
                 raise ValueError('There is no parameter group with name {:s}'.format(self.group_name))
             self._update_lip_const(group)

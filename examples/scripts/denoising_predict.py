@@ -9,7 +9,7 @@ from pylopt.dataset.dataset_utils import collate_function
 from pylopt.dataset.ImageDataset import TestImageDataset
 from pylopt.energy import Energy, MeasurementModel
 from pylopt.lower_problem import solve_lower
-from pylopt.proximal_maps.ProximalOperator import DenoisingProx
+from pylopt.optimise.proximal_maps.ProximalOperator import DenoisingProx
 from pylopt.regularisers import FieldsOfExperts, ImageFilter, StudentT, QuarticBSpline
 from pylopt.utils.evaluation_utils import compute_psnr
 from pylopt.utils.file_system_utils import get_repo_root_path
@@ -85,7 +85,7 @@ def denoise() -> None:
     energy = Energy(measurement_model, regulariser, lam=lam)
     energy.to(device=device, dtype=dtype)
 
-    method = 'adam'
+    method = 'napg'
     if method == 'nag':
         options = {'max_num_iterations': 1000, 
                    'rel_tol': 1e-5, 

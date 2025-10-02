@@ -6,14 +6,15 @@ from torch.utils.tensorboard import SummaryWriter
 from pathlib import Path
 
 from pylopt.bilevel_problem import BilevelOptimisation
-from pylopt.callbacks import SaveModel, PlotFiltersAndPotentials, TrainingMonitor
+from pylopt.bilevel_problem.callbacks import SaveModel, PlotFiltersAndPotentials, TrainingMonitor
+from pylopt.bilevel_problem.scheduler import (NAGLipConstGuard, AdaptiveNAGRestartScheduler,
+                              CosineAnnealingLRScheduler, AdaptiveLRRestartScheduler, 
+                              restart_condition_loss_based, restart_condition_gradient_based)
 from pylopt.dataset.ImageDataset import TestImageDataset, TrainingImageDataset
-from pylopt.proximal_maps.ProximalOperator import DenoisingProx
+from pylopt.optimise.proximal_maps.ProximalOperator import DenoisingProx
 from pylopt.regularisers.fields_of_experts.FieldsOfExperts import FieldsOfExperts
 from pylopt.regularisers.fields_of_experts.ImageFilter import ImageFilter
 from pylopt.regularisers.fields_of_experts.potential import StudentT, QuarticBSpline
-from pylopt.scheduler import (NAGLipConstGuard, CosineAnnealingLRScheduler, AdaptiveLRRestartScheduler,
-                                            restart_condition_loss_based, restart_condition_gradient_based)
 from pylopt.utils.logging_utils import setup_logger
 from pylopt.utils.seeding_utils import seed_random_number_generators
 from pylopt.utils.file_system_utils import create_experiment_dir, get_repo_root_path
@@ -144,14 +145,12 @@ def bilevel_learn(example_id: str) -> None:
     else:
         raise ValueError('Unknown optimisation method for upper level problem.')
 
-    # --- SCHEDULING ---
     schedulers = []
-
-
-    # Schedulers for NAG
+    # --- Schedulers for NAG
     schedulers += [NAGLipConstGuard(lip_const_bound=2 ** 9, lip_const_key='lip_const')]
+    # schedulers += [AdaptiveNAGRestartScheduler(condition_func=restart_condition_gradient_based, warm_up_period=1, patience=1)]
 
-    # Schedulers for Adam
+    # --- Schedulers for Adam
     # schedulers += [AdaptiveLRRestartScheduler(restart_condition_gradient_based, warm_up_period=2)]
     # schedulers += [CosineAnnealingLRScheduler(step_begin=200, 
     #                                          restart_cycle=None,
