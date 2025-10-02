@@ -64,24 +64,37 @@ PyLOpt aims to serve as a toolbox for scientists and engineers to address bileve
 
 ## Installation
 
-- Through pip
+Recommended Python version: >= 3.11
 
-    ```
-    pip install pylopt
-    ```
+### Installation via pip
 
-  Note that the pip package contains only the CPU supported version of the extension package `quartic_bspline_extension`. To use it
-  with CUDA support, it needs to be built locally:
-    1. Clone the repository from https://github.com/VLOGroup/quartic_bspline_extension
-    2. In the root directory of the repository run `make build`.
-    3. The builds (CPU & CUDA if NVIDIA-capable GPU is detected, CPU only else) are stored in the artefacts subdirectory.
-    4. Install the package using the generated Python wheel by `pip install *artefacts/<package_name>.whl`
+1. Install all the dependencies first using the requirements file:
+```
+pip install -r requirements.txt
+```
 
-- From source
+Note that not all the packages listed in `requirements.txt` are strictly required to use the package. For usage
+of the package only, the dependencies related to the `build-process` and the `publishing-process` can be omitted.
 
-    ```
-    git clone https://github.com/VLOGroup/pylopt.git
-    ```
+2. Finally, install `PyLOpt` via
+```
+pip install pylopt
+```
+
+#### Note
+
+The pip package contains only the CPU supported version of the extension package `quartic_bspline_extension`. To use it
+with CUDA support, it needs to be built locally:
+  1. Clone the repository from https://github.com/VLOGroup/quartic_bspline_extension
+  2. In the root directory of the repository run `make build`.
+  3. The builds (CPU & CUDA if NVIDIA-capable GPU is detected, CPU only else) are stored in the artefacts subdirectory.
+  4. Install the package using the generated Python wheel by `pip install *artefacts/<package_name>.whl`
+
+### Installation from source
+
+```
+git clone https://github.com/VLOGroup/pylopt.git
+```
 
 ## Core components 
 

@@ -72,7 +72,7 @@ def denoise() -> None:
                              collate_fn=lambda x: collate_function(x, crop_size=-1))
 
     image_filter = ImageFilter.from_file(os.path.join(root_path, 'data', 'model_data', PRETRAINED_FILTER_MODELS['chen-ranftl-pock_2014_scaled_7x7']))
-    potential = StudentT.from_file(os.path.join(os.getcwd(), 'data', 'model_data', PRETRAINED_POTENTIAL_MODELS['student_t_pylopt_I']))
+    potential = StudentT.from_file(os.path.join(root_path, 'data', 'model_data', PRETRAINED_POTENTIAL_MODELS['student_t_pylopt_I']))
 
     regulariser = FieldsOfExperts(potential, image_filter)
 
