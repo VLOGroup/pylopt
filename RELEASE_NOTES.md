@@ -10,6 +10,22 @@
 - Make visualisations look better.
 - Backward-hooks for handling of projections and prox-mappings
 - Improve error handling
+- Improve handling of parameter groups:
+    * Dictionaries to clearly map hyperparameter values to units which shall be trained, e.g. {'filters': {'lr': ...}, 'potentials': {'lip_const': ...}}
+- Improve usage of hyperparameter schedulers:
+    * Setup of scheduler per hyperparameter
+    * Currently only the schedulers for NAG allow to specify the parameter group on which scheduling is applied (Adam schedulers
+        apply scheduling by default to all of the parameter groups.)
+- Registry of schedulers, optimisers, regularisers:
+    * Plug in schedulers, etc. at runtime without need to change source code of package.
+
+## [0.1.1]
+
+### Fixes
+
+- Update readme.
+- Fix AdaptiveNAGRestartScheduler
+
 
 ## [0.1.0]
 

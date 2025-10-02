@@ -4,7 +4,7 @@ build-backend = 'setuptools.build_meta'
 
 [project]
 name = 'PyLOpt'
-version = '0.1.0'
+version = '1.0.0'
 dependencies = [
     'torch>=2.6.0',
     'numpy>=2.0.2',
@@ -15,7 +15,8 @@ dependencies = [
     'PyQt5>=5.15.11',
     'torchvision>=0.21.0',
     'pillow>=11.1.0',
-    'ninja>=1.13.0'
+    'ninja>=1.13.0',
+    'quartic_bspline_extension>=0.3.0'
 ]
 authors = [
     {name = 'Florian Thaler, Thomas Pock', email = 'florian.thaler@tugraz.at'}
@@ -32,9 +33,6 @@ classifiers = ['Programming Language :: Python :: 3']
 [tool.setuptools.packages.find]
 where = ['.']
 exclude = ['tests*', 'docs*', 'data*', 'data_analysis*', 'images*', 'artefacts*', 'examples*']
-
-[tool.setuptools.package-data]
-pylopt = ['model_data/*.pt', 'examples/notebooks/*.ipynb']
 
 [project.urls]
 Homepage = 'https://github.com/VLOGroup/pylopt'
